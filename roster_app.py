@@ -182,25 +182,40 @@ class StreamlitRosterOptimizer:
         
         return shifts
 
-    def plot_call_volume(self, analysis):
-        """Create visualization of call volume"""
-        if not analysis or 'hourly_volume' not in analysis:
-            return None
-        
-        hours = list(analysis['hourly_volume'].keys())
-        calls = list(analysis['hourly_volume'].values())
-        
-        fig = px.bar(
-            x=hours, y=calls,
-            labels={'x': 'Hour of Day', 'y': 'Number of Calls'},
-            title='Hourly Call Volume Distribution'
+def plot_call_volume(self, analysis):
+    """Create visualization of call volume"""
+    if not analysis or 'hourly_volume' not in analysis:
+        return None
+    
+    # Create a proper DataFrame for Plotly
+    plot_data = []
+    for hour, calls in analysis['hourly_volume'].items():
+        plot_data.append({'Hour': hour, 'Calls': calls})
+    
+    df_plot = pd.DataFrame(plot_data)
+    
+    fig = px.bar(
+        df_plot, 
+        x='Hour', 
+        y='Calls',  # ← FIXED: Use column names instead of lists
+        labels={'Hour': 'Hour of Day', 'Calls': 'Number of Calls'},
+        title='📊 Hourly Call Volume Distribution',
+        color='Calls',
+        color_continuous_scale='blues'
+    )
+    
+    # Add peak hour annotations
+    for peak_hour in analysis['peak_hours']:
+        fig.add_vline(
+            x=peak_hour, 
+            line_dash="dash", 
+            line_color="red", 
+            annotation_text=f"Peak {peak_hour}:00", 
+            annotation_position="top"
         )
-        
-        # Add peak hour annotations
-        for peak_hour in analysis['peak_hours']:
-            fig.add_vline(x=peak_hour, line_dash="dash", line_color="red")
-        
-        return fig
+    
+    fig.update_layout(height=400)
+    return fig
 
 # Main application
 def main():
