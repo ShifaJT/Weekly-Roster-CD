@@ -45,21 +45,41 @@ st.markdown("""
         border: 1px solid #1f77b4;
         margin: 0.5rem 0;
     }
-    .day-tabs {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-        flex-wrap: wrap;
-    }
     .day-tab {
         padding: 0.5rem 1rem;
         background-color: #e9ecef;
         border-radius: 0.5rem;
         cursor: pointer;
+        margin: 0.2rem;
+        display: inline-block;
     }
     .day-tab.active {
         background-color: #1f77b4;
         color: white;
+    }
+    .week-off {
+        background-color: #ffe6e6;
+    }
+    .split-shift {
+        background-color: #e6f7ff;
+    }
+    .straight-shift {
+        background-color: #f0f8f0;
+    }
+    .section-header {
+        border-bottom: 2px solid #1f77b4;
+        padding-bottom: 0.5rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        color: #1f77b4;
+    }
+    .dataframe {
+        font-size: 0.9rem;
+    }
+    .highlight {
+        background-color: #fff2cc;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -144,13 +164,13 @@ class CallCenterRosterOptimizer:
             roster_df = self.apply_special_rules(roster_df)
             
             # Assign weekly offs
-            roster_df = self.assign_weekly_offs(roster_df)
+            roster_df, week_offs = self.assign_weekly_offs(roster_df)
             
-            return roster_df
+            return roster_df, week_offs
             
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
-            return None
+            return None, None
     
     def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data):
         """Generate roster for a single day"""
@@ -321,12 +341,13 @@ class CallCenterRosterOptimizer:
         return edited_df
     
     def assign_weekly_offs(self, roster_df):
-        """Assign weekly off days to champions"""
+        """Assign weekly off days to champions and return the roster and week offs mapping"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         champions = roster_df['Champion'].unique()
         
         # Create a copy of the roster
         updated_roster = roster_df.copy()
+        week_offs = {}
         
         # For each champion, assign one day off
         for champion in champions:
@@ -336,13 +357,20 @@ class CallCenterRosterOptimizer:
             # If champion is working all 7 days, remove one randomly
             if len(champ_days) == 7:
                 day_off = random.choice(days)
+                week_offs[champion] = day_off
                 
                 # Remove the champion from the selected day
                 updated_roster = updated_roster[
                     ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
                 ]
+            else:
+                # Find which day is missing
+                working_days = set(champ_days)
+                all_days = set(days)
+                day_off = list(all_days - working_days)[0] if all_days - working_days else "No day off"
+                week_offs[champion] = day_off
         
-        return updated_roster
+        return updated_roster, week_offs
     
     def apply_special_rules(self, roster_df):
         """Apply special rules like Revathi always on split shift"""
@@ -480,7 +508,7 @@ def main():
                 }
             
             with st.spinner("Generating optimized roster..."):
-                roster_df = optimizer.generate_roster(
+                roster_df, week_offs = optimizer.generate_roster(
                     straight_shifts, 
                     split_shifts, 
                     st.session_state.analysis_data
@@ -492,98 +520,166 @@ def main():
                 
                 if roster_df is not None:
                     st.session_state.roster_df = roster_df
+                    st.session_state.week_offs = week_offs
                     
                     # Calculate performance metrics
                     metrics = optimizer.calculate_coverage(roster_df, st.session_state.analysis_data)
                     answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
                     daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
                     
+                    st.session_state.metrics = metrics
+                    st.session_state.answer_rate = answer_rate
+                    st.session_state.daily_rates = daily_rates
+                    
                     st.success("✅ Roster generated successfully!")
-                    
-                    # Display metrics
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Weekly Capacity", f"{metrics['total_capacity']:,.0f} calls")
-                    with col2:
-                        st.metric("Required Capacity", f"{metrics['required_capacity']:,.0f} calls")
-                    with col3:
-                        st.metric("Utilization Rate", f"{metrics['utilization_rate']:.1f}%")
-                    with col4:
-                        st.metric("Expected Answer Rate", f"{answer_rate:.1f}%")
-                    
-                    # Display daily answer rates
-                    st.subheader("📊 Daily Answer Rates")
-                    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                    day_cols = st.columns(7)
-                    
-                    for i, day in enumerate(days):
-                        with day_cols[i]:
-                            st.metric(day[:3], f"{daily_rates.get(day, 0):.1f}%")
-                    
-                    # Display roster by day
-                    st.subheader("📋 Daily Roster Summary")
-                    
-                    # Day tabs
-                    selected_day = st.selectbox("Select Day", days)
-                    
-                    day_df = roster_df[roster_df['Day'] == selected_day].drop('Day', axis=1)
-                    st.dataframe(day_df, use_container_width=True)
-                    
-                    # Manual editing option
-                    st.subheader("🛠️ Manual Adjustments")
-                    if st.checkbox("Enable manual editing"):
-                        edited_roster = optimizer.show_editable_roster(roster_df)
-                        st.session_state.edited_roster = edited_roster
-                        
-                        # Recalculate metrics after editing
-                        if st.button("Update Metrics after Editing"):
-                            updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
-                            updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
-                            updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
-                            
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
-                                         delta=f"{updated_metrics['total_capacity'] - metrics['total_capacity']:,.0f}")
-                            with col2:
-                                st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
-                            with col3:
-                                st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
-                                         delta=f"{updated_metrics['utilization_rate'] - metrics['utilization_rate']:.1f}")
-                            with col4:
-                                st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
-                                         delta=f"{updated_answer_rate - answer_rate:.1f}")
-                    
-                    # Download options
-                    st.subheader("💾 Download Options")
-                    csv = roster_df.to_csv(index=False)
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.download_button(
-                            "📥 Download as CSV",
-                            csv,
-                            "call_center_roster.csv",
-                            "text/csv",
-                            use_container_width=True
-                        )
-                    with col2:
-                        # Excel download
-                        excel_buffer = BytesIO()
-                        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                            roster_df.to_excel(writer, index=False, sheet_name='Roster')
-                        excel_data = excel_buffer.getvalue()
-                        st.download_button(
-                            "📥 Download as Excel",
-                            excel_data,
-                            "call_center_roster.xlsx",
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
+                    st.experimental_rerun()
         
         elif 'roster_df' in st.session_state:
             # Show previously generated roster
             st.info("📋 Previously generated roster is available. Click the button to generate a new one.")
+    
+    # Display results if available
+    if 'roster_df' in st.session_state and 'metrics' in st.session_state:
+        st.markdown("---")
+        st.markdown('<div class="section-header"><h2>📊 Performance Metrics</h2></div>', unsafe_allow_html=True)
+        
+        # Display metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0f} calls")
+        with col2:
+            st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
+        with col3:
+            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
+        with col4:
+            st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+        
+        # Display daily answer rates
+        st.markdown('<div class="section-header"><h2>📈 Daily Answer Rates</h2></div>', unsafe_allow_html=True)
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        day_cols = st.columns(7)
+        
+        for i, day in enumerate(days):
+            with day_cols[i]:
+                rate = st.session_state.daily_rates.get(day, 0)
+                st.metric(day[:3], f"{rate:.1f}%")
+        
+        # Week off information
+        st.markdown('<div class="section-header"><h2>📅 Weekly Off Schedule</h2></div>', unsafe_allow_html=True)
+        
+        if 'week_offs' in st.session_state:
+            week_off_df = pd.DataFrame.from_dict(st.session_state.week_offs, orient='index', columns=['Day Off'])
+            week_off_df.index.name = 'Champion'
+            week_off_df = week_off_df.reset_index()
+            
+            st.dataframe(
+                week_off_df,
+                use_container_width=True,
+                hide_index=True
+            )
+        
+        # Day selection for roster view
+        st.markdown('<div class="section-header"><h2>👥 Daily Roster Details</h2></div>', unsafe_allow_html=True)
+        
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        selected_day = st.selectbox("Select Day to View Roster", days)
+        
+        # Display roster for selected day
+        day_df = st.session_state.roster_df[st.session_state.roster_df['Day'] == selected_day].copy()
+        
+        # Apply styling based on shift type
+        def color_shifts(row):
+            if row['Shift Type'] == 'Split':
+                return ['background-color: #e6f7ff'] * len(row)
+            else:
+                return ['background-color: #f0f8f0'] * len(row)
+        
+        # Display the roster with styling
+        if not day_df.empty:
+            st.dataframe(
+                day_df.drop('Day', axis=1).style.apply(color_shifts, axis=1),
+                use_container_width=True
+            )
+            
+            # Show summary for the day
+            day_capacity = 0
+            for _, row in day_df.iterrows():
+                if row['Shift Type'] == 'Straight':
+                    hours_worked = 9
+                else:
+                    shifts = row['Start Time'].split(' & ')
+                    hours_worked = 0
+                    for shift in shifts:
+                        start, end = shift.split('-')
+                        start_hour = int(start.split(':')[0])
+                        end_hour = int(end.split(':')[0])
+                        hours_worked += (end_hour - start_hour)
+                
+                day_capacity += row['Calls/Hour Capacity'] * hours_worked
+            
+            day_answer_rate = min(100, (day_capacity / st.session_state.analysis_data['total_daily_calls']) * 100)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(f"{selected_day} Capacity", f"{day_capacity:,.0f} calls")
+            with col2:
+                st.metric(f"{selected_day} Required", f"{st.session_state.analysis_data['total_daily_calls']:,.0f} calls")
+            with col3:
+                st.metric(f"{selected_day} Answer Rate", f"{day_answer_rate:.1f}%")
+        
+        # Manual editing option
+        st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
+        
+        if st.checkbox("Enable manual editing"):
+            edited_roster = optimizer.show_editable_roster(st.session_state.roster_df)
+            st.session_state.edited_roster = edited_roster
+            
+            # Recalculate metrics after editing
+            if st.button("Update Metrics after Editing"):
+                updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
+                updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
+                updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
+                             delta=f"{updated_metrics['total_capacity'] - st.session_state.metrics['total_capacity']:,.0f}")
+                with col2:
+                    st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
+                with col3:
+                    st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
+                             delta=f"{updated_metrics['utilization_rate'] - st.session_state.metrics['utilization_rate']:.1f}")
+                with col4:
+                    st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
+                             delta=f"{updated_answer_rate - st.session_state.answer_rate:.1f}")
+        
+        # Download options
+        st.markdown('<div class="section-header"><h2>💾 Download Options</h2></div>', unsafe_allow_html=True)
+        
+        csv = st.session_state.roster_df.to_csv(index=False)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "📥 Download as CSV",
+                csv,
+                "call_center_roster.csv",
+                "text/csv",
+                use_container_width=True
+            )
+        with col2:
+            # Excel download
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                st.session_state.roster_df.to_excel(writer, index=False, sheet_name='Roster')
+            excel_data = excel_buffer.getvalue()
+            st.download_button(
+                "📥 Download as Excel",
+                excel_data,
+                "call_center_roster.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 
 if __name__ == "__main__":
     main()
