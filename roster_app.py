@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 from io import BytesIO
 import base64
+import random
 
 # Page configuration
 st.set_page_config(
@@ -43,6 +44,22 @@ st.markdown("""
         border-radius: 0.5rem;
         border: 1px solid #1f77b4;
         margin: 0.5rem 0;
+    }
+    .day-tabs {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+    }
+    .day-tab {
+        padding: 0.5rem 1rem;
+        background-color: #e9ecef;
+        border-radius: 0.5rem;
+        cursor: pointer;
+    }
+    .day-tab.active {
+        background-color: #1f77b4;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -121,7 +138,15 @@ class CallCenterRosterOptimizer:
                 day_roster = self.generate_daily_roster(day, champions_to_use, straight_shifts, split_shifts, analysis_data)
                 roster_data.extend(day_roster)
             
-            return pd.DataFrame(roster_data)
+            roster_df = pd.DataFrame(roster_data)
+            
+            # Apply special rules
+            roster_df = self.apply_special_rules(roster_df)
+            
+            # Assign weekly offs
+            roster_df = self.assign_weekly_offs(roster_df)
+            
+            return roster_df
             
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
@@ -191,6 +216,163 @@ class CallCenterRosterOptimizer:
             'utilization_rate': min(100, (required_capacity / total_capacity) * 100),
             'expected_answer_rate': min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100)
         }
+    
+    def calculate_answer_rate(self, roster_df, analysis_data):
+        """Calculate expected Answer Rate percentage"""
+        if roster_df is None or analysis_data is None:
+            return None
+            
+        # Calculate total weekly capacity
+        total_weekly_capacity = 0
+        for day in roster_df['Day'].unique():
+            day_roster = roster_df[roster_df['Day'] == day]
+            for _, row in day_roster.iterrows():
+                # Calculate hours worked based on shift type
+                if row['Shift Type'] == 'Straight':
+                    hours_worked = 9
+                else:  # Split shift
+                    # Parse the split shift hours
+                    shifts = row['Start Time'].split(' & ')
+                    hours_worked = 0
+                    for shift in shifts:
+                        start, end = shift.split('-')
+                        start_hour = int(start.split(':')[0])
+                        end_hour = int(end.split(':')[0])
+                        hours_worked += (end_hour - start_hour)
+                
+                total_weekly_capacity += row['Calls/Hour Capacity'] * hours_worked
+        
+        # Calculate expected weekly call volume
+        total_weekly_calls = analysis_data['total_daily_calls'] * 7
+        
+        # Calculate answer rate (capped at 100%)
+        answer_rate = min(100, (total_weekly_capacity / total_weekly_calls) * 100)
+        
+        return answer_rate
+    
+    def calculate_daily_answer_rates(self, roster_df, analysis_data):
+        """Calculate Answer Rate for each day"""
+        if roster_df is None or analysis_data is None:
+            return None
+            
+        daily_rates = {}
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            if len(day_roster) == 0:
+                daily_rates[day] = 0
+                continue
+                
+            # Calculate daily capacity
+            daily_capacity = 0
+            for _, row in day_roster.iterrows():
+                # Calculate hours worked based on shift type
+                if row['Shift Type'] == 'Straight':
+                    hours_worked = 9
+                else:  # Split shift
+                    # Parse the split shift hours
+                    shifts = row['Start Time'].split(' & ')
+                    hours_worked = 0
+                    for shift in shifts:
+                        start, end = shift.split('-')
+                        start_hour = int(start.split(':')[0])
+                        end_hour = int(end.split(':')[0])
+                        hours_worked += (end_hour - start_hour)
+                
+                daily_capacity += row['Calls/Hour Capacity'] * hours_worked
+            
+            # Calculate daily answer rate
+            daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+        
+        return daily_rates
+    
+    def show_editable_roster(self, roster_df):
+        """Display an editable roster table"""
+        st.subheader("✏️ Edit Roster Manually")
+        
+        # Create a copy for editing
+        edited_df = st.data_editor(
+            roster_df,
+            column_config={
+                "Champion": st.column_config.SelectboxColumn(
+                    "Champion",
+                    options=[champ["name"] for champ in self.champions],
+                    required=True
+                ),
+                "Shift Type": st.column_config.SelectboxColumn(
+                    "Shift Type",
+                    options=["Straight", "Split"],
+                    required=True
+                ),
+                "Start Time": st.column_config.TextColumn(
+                    "Start Time",
+                    help="Format: HH:MM or HH:MM-HH:MM & HH:MM-HH:MM for split shifts"
+                ),
+                "End Time": st.column_config.TextColumn(
+                    "End Time"
+                )
+            },
+            hide_index=True,
+            num_rows="dynamic",
+            use_container_width=True
+        )
+        
+        return edited_df
+    
+    def assign_weekly_offs(self, roster_df):
+        """Assign weekly off days to champions"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        champions = roster_df['Champion'].unique()
+        
+        # Create a copy of the roster
+        updated_roster = roster_df.copy()
+        
+        # For each champion, assign one day off
+        for champion in champions:
+            # Get all days the champion is working
+            champ_days = updated_roster[updated_roster['Champion'] == champion]['Day'].unique()
+            
+            # If champion is working all 7 days, remove one randomly
+            if len(champ_days) == 7:
+                day_off = random.choice(days)
+                
+                # Remove the champion from the selected day
+                updated_roster = updated_roster[
+                    ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
+                ]
+        
+        return updated_roster
+    
+    def apply_special_rules(self, roster_df):
+        """Apply special rules like Revathi always on split shift"""
+        # Ensure Revathi is always on split shift
+        revathi_mask = roster_df['Champion'] == 'Revathi'
+        roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
+        
+        # Update split shift times for Revathi
+        for idx in roster_df[revathi_mask].index:
+            pattern = (7, 12, 16, 21)  # 7-12 & 4-9
+            roster_df.at[idx, 'Start Time'] = f"{pattern[0]:02d}:00-{pattern[1]:02d}:00 & {pattern[2]:02d}:00-{pattern[3]:02d}:00"
+            roster_df.at[idx, 'End Time'] = f"{pattern[3]:02d}:00"
+            roster_df.at[idx, 'Duration'] = '9 hours (with break)'
+        
+        return roster_df
+    
+    def filter_split_shift_champs(self, roster_df, can_split_only=True):
+        """Filter champions who can work split shifts"""
+        if can_split_only:
+            # Get list of champions who can work split shifts
+            split_champs = [champ["name"] for champ in self.champions if champ["can_split"]]
+            
+            # Filter roster to only include these champions for split shifts
+            filtered_roster = roster_df.copy()
+            split_mask = filtered_roster['Shift Type'] == 'Split'
+            filtered_roster = filtered_roster[~split_mask | filtered_roster['Champion'].isin(split_champs)]
+            
+            return filtered_roster
+        else:
+            return roster_df
 
 # Main application
 def main():
@@ -227,6 +409,15 @@ def main():
             split_shifts = total_champs - straight_shifts
         
         st.metric("Total Champions Used", f"{straight_shifts + split_shifts}/{total_champs}")
+        
+        # Split shift filter
+        st.subheader("Split Shift Filter")
+        split_filter = st.checkbox(
+            "Only assign split shifts to champions who can split",
+            value=True,
+            help="When enabled, only champions marked as able to work split shifts will be assigned to them"
+        )
+        
         st.markdown('</div>', unsafe_allow_html=True)
         
         # File upload section
@@ -248,6 +439,7 @@ def main():
         - 🕘 **9:00 PM** - Operation ends
         - 📞 **14 hours** daily coverage
         - 🎯 **9-hour shifts** for all champions
+        - 🔄 **Revathi** always assigned to split shifts
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -294,30 +486,73 @@ def main():
                     st.session_state.analysis_data
                 )
                 
+                # Apply split shift filter if enabled
+                if split_filter:
+                    roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
+                
                 if roster_df is not None:
                     st.session_state.roster_df = roster_df
                     
                     # Calculate performance metrics
                     metrics = optimizer.calculate_coverage(roster_df, st.session_state.analysis_data)
+                    answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
+                    daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
                     
                     st.success("✅ Roster generated successfully!")
                     
                     # Display metrics
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Total Weekly Capacity", f"{metrics['total_capacity']:,.0f} calls")
                     with col2:
                         st.metric("Required Capacity", f"{metrics['required_capacity']:,.0f} calls")
                     with col3:
-                        st.metric("Expected Answer Rate", f"{metrics['expected_answer_rate']:.1f}%")
+                        st.metric("Utilization Rate", f"{metrics['utilization_rate']:.1f}%")
+                    with col4:
+                        st.metric("Expected Answer Rate", f"{answer_rate:.1f}%")
+                    
+                    # Display daily answer rates
+                    st.subheader("📊 Daily Answer Rates")
+                    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    day_cols = st.columns(7)
+                    
+                    for i, day in enumerate(days):
+                        with day_cols[i]:
+                            st.metric(day[:3], f"{daily_rates.get(day, 0):.1f}%")
                     
                     # Display roster by day
                     st.subheader("📋 Daily Roster Summary")
                     
-                    for day in roster_df['Day'].unique():
-                        with st.expander(f"📅 {day} - {len(roster_df[roster_df['Day'] == day])} champions"):
-                            day_df = roster_df[roster_df['Day'] == day].drop('Day', axis=1)
-                            st.dataframe(day_df, use_container_width=True)
+                    # Day tabs
+                    selected_day = st.selectbox("Select Day", days)
+                    
+                    day_df = roster_df[roster_df['Day'] == selected_day].drop('Day', axis=1)
+                    st.dataframe(day_df, use_container_width=True)
+                    
+                    # Manual editing option
+                    st.subheader("🛠️ Manual Adjustments")
+                    if st.checkbox("Enable manual editing"):
+                        edited_roster = optimizer.show_editable_roster(roster_df)
+                        st.session_state.edited_roster = edited_roster
+                        
+                        # Recalculate metrics after editing
+                        if st.button("Update Metrics after Editing"):
+                            updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
+                            updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
+                            updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
+                                         delta=f"{updated_metrics['total_capacity'] - metrics['total_capacity']:,.0f}")
+                            with col2:
+                                st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
+                            with col3:
+                                st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
+                                         delta=f"{updated_metrics['utilization_rate'] - metrics['utilization_rate']:.1f}")
+                            with col4:
+                                st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
+                                         delta=f"{updated_answer_rate - answer_rate:.1f}")
                     
                     # Download options
                     st.subheader("💾 Download Options")
