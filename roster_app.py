@@ -104,6 +104,13 @@ st.markdown("""
         background-color: #ffcccc;
         font-weight: bold;
     }
+    .template-download {
+        background-color: #e6f7ff;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        border: 2px dashed #1f77b4;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -150,37 +157,131 @@ class CallCenterRosterOptimizer:
             {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False}
         ]
     
+    def create_template_file(self):
+        """Create a template Excel file for call volume data"""
+        # Create sample data for the last 30 days
+        dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        
+        # Create hourly data template
+        hourly_data = pd.DataFrame({
+            'Hour': list(range(7, 22)),
+            'Calls': [0] * 15
+        })
+        
+        # Create daily data template
+        daily_data = pd.DataFrame({
+            'Date': dates,
+            'Total_Calls': [0] * 30,
+            'Peak_Hour': [0] * 30,
+            'Peak_Volume': [0] * 30
+        })
+        
+        # Create instructions sheet
+        instructions = pd.DataFrame({
+            'Instruction': [
+                'INSTRUCTIONS:',
+                '1. Fill in your call volume data in the appropriate sheets',
+                '2. For best results, use the Hourly_Data sheet with calls per hour',
+                '3. If you only have daily totals, use the Daily_Data sheet',
+                '4. Save the file and upload it back to the app',
+                '5. The app will analyze your data and generate an optimized roster',
+                '',
+                'HOURLY_DATA SHEET:',
+                '- Hour: Operation hour (7 to 21)',
+                '- Calls: Number of calls received in that hour',
+                '',
+                'DAILY_DATA SHEET:',
+                '- Date: Date of the data (YYYY-MM-DD)',
+                '- Total_Calls: Total calls received that day',
+                '- Peak_Hour: Hour with highest call volume (7-21)',
+                '- Peak_Volume: Number of calls during peak hour'
+            ]
+        })
+        
+        # Create Excel file with multiple sheets
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            instructions.to_excel(writer, sheet_name='Instructions', index=False)
+            hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
+            daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
+        
+        return excel_buffer.getvalue()
+    
     def analyze_excel_data(self, uploaded_file):
         """Analyze uploaded Excel file for call volume"""
         try:
-            df = pd.read_excel(uploaded_file)
+            # Read the Excel file
+            xls = pd.ExcelFile(uploaded_file)
             
-            # Calculate average weekly calls based on your input
-            weekly_calls = 17500  # Based on your average
+            # Check if hourly data is available
+            if 'Hourly_Data' in xls.sheet_names:
+                df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
+                
+                if 'Hour' in df.columns and 'Calls' in df.columns:
+                    # Calculate average hourly volume
+                    hourly_volume = dict(zip(df['Hour'], df['Calls']))
+                    
+                    # Find peak hours (top 4 hours with highest call volume)
+                    peak_hours = df.nlargest(4, 'Calls')['Hour'].tolist()
+                    
+                    # Calculate total daily calls
+                    total_daily_calls = df['Calls'].sum()
+                    
+                    return {
+                        'hourly_volume': hourly_volume,
+                        'peak_hours': peak_hours,
+                        'total_daily_calls': total_daily_calls
+                    }
             
-            return {
-                'hourly_volume': {
-                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
-                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
-                },
-                'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': weekly_calls / 7  # Distribute weekly calls evenly
-            }
+            # Check if daily data is available
+            if 'Daily_Data' in xls.sheet_names:
+                df = pd.read_excel(uploaded_file, sheet_name='Daily_Data')
+                
+                if 'Total_Calls' in df.columns:
+                    # Calculate average daily calls
+                    avg_daily_calls = df['Total_Calls'].mean()
+                    
+                    # Use default hourly distribution based on typical patterns
+                    hourly_volume = {
+                        7: 0.02 * avg_daily_calls, 8: 0.05 * avg_daily_calls, 9: 0.08 * avg_daily_calls,
+                        10: 0.10 * avg_daily_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
+                        13: 0.10 * avg_daily_calls, 14: 0.09 * avg_daily_calls, 15: 0.08 * avg_daily_calls,
+                        16: 0.08 * avg_daily_calls, 17: 0.07 * avg_daily_calls, 18: 0.06 * avg_daily_calls,
+                        19: 0.05 * avg_daily_calls, 20: 0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
+                    }
+                    
+                    # Find peak hours from data if available, otherwise use defaults
+                    if 'Peak_Hour' in df.columns and 'Peak_Volume' in df.columns:
+                        avg_peak_hour = df['Peak_Hour'].mode()[0] if not df['Peak_Hour'].mode().empty else 11
+                        peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
+                    else:
+                        peak_hours = [11, 12, 13, 14]
+                    
+                    return {
+                        'hourly_volume': hourly_volume,
+                        'peak_hours': peak_hours,
+                        'total_daily_calls': avg_daily_calls
+                    }
+            
+            # If no recognized format, use default data
+            st.warning("No recognized data format. Using sample data.")
+            return self.get_sample_data()
             
         except Exception as e:
             st.error(f"Error reading Excel file: {str(e)}")
-            # Use default data based on your average
-            weekly_calls = 17500
-            return {
-                'hourly_volume': {
-                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
-                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
-                },
-                'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': weekly_calls / 7
-            }
+            return self.get_sample_data()
+    
+    def get_sample_data(self):
+        """Return sample data structure"""
+        return {
+            'hourly_volume': {
+                7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
+                18: 224.9, 19: 179.3, 20: 113.9, 21: 0
+            },
+            'peak_hours': [11, 12, 13, 14],
+            'total_daily_calls': 2975
+        }
     
     def generate_roster(self, straight_shifts, split_shifts, analysis_data, manual_splits=None):
         """Generate optimized roster based on shift preferences"""
@@ -557,6 +658,35 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Template download section
+        st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+        st.header("📊 Data Template")
+        
+        st.markdown('<div class="template-download">', unsafe_allow_html=True)
+        st.subheader("Download Data Template")
+        st.write("Download this template, add your call volume data, and upload it back.")
+        
+        # Create template file
+        template_data = optimizer.create_template_file()
+        
+        st.download_button(
+            "📥 Download Data Template",
+            template_data,
+            "call_volume_template.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # File upload section
+        st.subheader("Upload Your Data")
+        uploaded_file = st.file_uploader(
+            "Upload Your Call Volume Data", 
+            type=['xlsx', 'xls'],
+            help="Upload your filled-in call volume data Excel file"
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # Manual split shift assignment
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🔧 Manual Split Shift Assignment")
@@ -603,16 +733,6 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # File upload section
-        st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-        st.header("📊 Data Upload")
-        uploaded_file = st.file_uploader(
-            "Upload Call Volume Excel", 
-            type=['xlsx', 'xls'],
-            help="Upload your call volume data Excel file"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        
         # Operation hours info
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🕐 Operation Hours")
@@ -640,7 +760,7 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         
         if uploaded_file:
-            st.success("✅ Excel file uploaded successfully!")
+            st.success("✅ Data file uploaded successfully!")
             analysis_data = optimizer.analyze_excel_data(uploaded_file)
             if analysis_data:
                 st.session_state.analysis_data = analysis_data
