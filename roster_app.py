@@ -81,6 +81,29 @@ st.markdown("""
         padding: 0.2rem 0.5rem;
         border-radius: 0.3rem;
     }
+    .split-shift-option {
+        background-color: #e6f7ff;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid #1f77b4;
+    }
+    .roster-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .roster-table th, .roster-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    .roster-table th {
+        background-color: #f2f2f2;
+    }
+    .wo-cell {
+        background-color: #ffcccc;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -88,6 +111,12 @@ class CallCenterRosterOptimizer:
     def __init__(self):
         self.operation_hours = list(range(7, 22))  # 7 AM to 9 PM
         self.champions = self.load_champions()
+        self.split_shift_patterns = [
+            {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00"},
+            {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
+            {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
+            {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"}
+        ]
         
     def load_champions(self):
         return [
@@ -126,24 +155,34 @@ class CallCenterRosterOptimizer:
         try:
             df = pd.read_excel(uploaded_file)
             
-            # Extract hourly call volume (simplified for demo)
-            hourly_volume = {
-                7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
-                18: 224.9, 19: 179.3, 20: 113.9, 21: 0
-            }
+            # Calculate average weekly calls based on your input
+            weekly_calls = 17500  # Based on your average
             
             return {
-                'hourly_volume': hourly_volume,
+                'hourly_volume': {
+                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
+                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
+                },
                 'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': 2975
+                'total_daily_calls': weekly_calls / 7  # Distribute weekly calls evenly
             }
             
         except Exception as e:
             st.error(f"Error reading Excel file: {str(e)}")
-            return None
+            # Use default data based on your average
+            weekly_calls = 17500
+            return {
+                'hourly_volume': {
+                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
+                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
+                },
+                'peak_hours': [11, 12, 13, 14],
+                'total_daily_calls': weekly_calls / 7
+            }
     
-    def generate_roster(self, straight_shifts, split_shifts, analysis_data):
+    def generate_roster(self, straight_shifts, split_shifts, analysis_data, manual_splits=None):
         """Generate optimized roster based on shift preferences"""
         try:
             total_champions = straight_shifts + split_shifts
@@ -155,7 +194,7 @@ class CallCenterRosterOptimizer:
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             
             for day in days:
-                day_roster = self.generate_daily_roster(day, champions_to_use, straight_shifts, split_shifts, analysis_data)
+                day_roster = self.generate_daily_roster(day, champions_to_use, straight_shifts, split_shifts, analysis_data, manual_splits)
                 roster_data.extend(day_roster)
             
             roster_df = pd.DataFrame(roster_data)
@@ -163,8 +202,12 @@ class CallCenterRosterOptimizer:
             # Apply special rules
             roster_df = self.apply_special_rules(roster_df)
             
-            # Assign weekly offs
-            roster_df, week_offs = self.assign_weekly_offs(roster_df)
+            # Apply manual split assignments
+            if manual_splits:
+                roster_df = self.apply_manual_splits(roster_df, manual_splits)
+            
+            # Assign weekly offs with limit of 3-4 per day
+            roster_df, week_offs = self.assign_weekly_offs(roster_df, max_offs_per_day=4)
             
             return roster_df, week_offs
             
@@ -172,7 +215,7 @@ class CallCenterRosterOptimizer:
             st.error(f"Error generating roster: {str(e)}")
             return None, None
     
-    def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data):
+    def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data, manual_splits=None):
         """Generate roster for a single day"""
         daily_roster = []
         
@@ -189,7 +232,7 @@ class CallCenterRosterOptimizer:
                 'Primary Language': champ['primary_lang'].upper(),
                 'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
                 'Shift Type': 'Straight',
-                'Start Time': f"{start_time:02d}:00",
+                'Start Time': f"{start_time:02d}:00 to {end_time:02d}:00",
                 'End Time': f"{end_time:02d}:00",
                 'Duration': '9 hours',
                 'Calls/Hour Capacity': champ['calls_per_hour'],
@@ -197,15 +240,8 @@ class CallCenterRosterOptimizer:
             })
         
         # Split shifts (for remaining champions)
-        split_patterns = [
-            (7, 12, 16, 21),   # 7-12 & 4-9
-            (8, 13, 17, 21),   # 8-1 & 5-9
-            (9, 14, 17, 21),   # 9-2 & 5-9
-            (10, 15, 17, 21)   # 10-3 & 5-9
-        ]
-        
         for i, champ in enumerate(champions[straight_shifts:straight_shifts + split_shifts]):
-            pattern = split_patterns[i % len(split_patterns)]
+            pattern = self.split_shift_patterns[i % len(self.split_shift_patterns)]
             
             daily_roster.append({
                 'Day': day,
@@ -213,8 +249,8 @@ class CallCenterRosterOptimizer:
                 'Primary Language': champ['primary_lang'].upper(),
                 'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
                 'Shift Type': 'Split',
-                'Start Time': f"{pattern[0]:02d}:00-{pattern[1]:02d}:00 & {pattern[2]:02d}:00-{pattern[3]:02d}:00",
-                'End Time': f"{pattern[3]:02d}:00",
+                'Start Time': pattern['display'],
+                'End Time': f"{pattern['times'][3]:02d}:00",
                 'Duration': '9 hours (with break)',
                 'Calls/Hour Capacity': champ['calls_per_hour'],
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
@@ -255,9 +291,9 @@ class CallCenterRosterOptimizer:
                     shifts = row['Start Time'].split(' & ')
                     hours_worked = 0
                     for shift in shifts:
-                        start, end = shift.split('-')
-                        start_hour = int(start.split(':')[0])
-                        end_hour = int(end.split(':')[0])
+                        times = shift.split(' to ')
+                        start_hour = int(times[0].split(':')[0])
+                        end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
                 
                 total_weekly_capacity += row['Calls/Hour Capacity'] * hours_worked
@@ -295,9 +331,9 @@ class CallCenterRosterOptimizer:
                     shifts = row['Start Time'].split(' & ')
                     hours_worked = 0
                     for shift in shifts:
-                        start, end = shift.split('-')
-                        start_hour = int(start.split(':')[0])
-                        end_hour = int(end.split(':')[0])
+                        times = shift.split(' to ')
+                        start_hour = int(times[0].split(':')[0])
+                        end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
                 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
@@ -327,7 +363,7 @@ class CallCenterRosterOptimizer:
                 ),
                 "Start Time": st.column_config.TextColumn(
                     "Start Time",
-                    help="Format: HH:MM or HH:MM-HH:MM & HH:MM-HH:MM for split shifts"
+                    help="Format: HH:MM to HH:MM or HH:MM to HH:MM & HH:MM to HH:MM for split shifts"
                 ),
                 "End Time": st.column_config.TextColumn(
                     "End Time"
@@ -340,8 +376,8 @@ class CallCenterRosterOptimizer:
         
         return edited_df
     
-    def assign_weekly_offs(self, roster_df):
-        """Assign weekly off days to champions and return the roster and week offs mapping"""
+    def assign_weekly_offs(self, roster_df, max_offs_per_day=4):
+        """Assign weekly off days to champions with limit per day"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         champions = roster_df['Champion'].unique()
         
@@ -349,26 +385,39 @@ class CallCenterRosterOptimizer:
         updated_roster = roster_df.copy()
         week_offs = {}
         
+        # Track offs per day
+        offs_per_day = {day: 0 for day in days}
+        
         # For each champion, assign one day off
         for champion in champions:
             # Get all days the champion is working
             champ_days = updated_roster[updated_roster['Champion'] == champion]['Day'].unique()
             
-            # If champion is working all 7 days, remove one randomly
+            # If champion is working all 7 days, remove one day
             if len(champ_days) == 7:
-                day_off = random.choice(days)
-                week_offs[champion] = day_off
+                # Find days that haven't reached the max off limit
+                available_off_days = [day for day in days if offs_per_day[day] < max_offs_per_day]
                 
-                # Remove the champion from the selected day
-                updated_roster = updated_roster[
-                    ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
-                ]
+                if available_off_days:
+                    day_off = random.choice(available_off_days)
+                    week_offs[champion] = day_off
+                    offs_per_day[day_off] += 1
+                    
+                    # Remove the champion from the selected day
+                    updated_roster = updated_roster[
+                        ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
+                    ]
+                else:
+                    # If all days have max offs, don't assign an off day
+                    week_offs[champion] = "No day off (max reached)"
             else:
                 # Find which day is missing
                 working_days = set(champ_days)
                 all_days = set(days)
                 day_off = list(all_days - working_days)[0] if all_days - working_days else "No day off"
                 week_offs[champion] = day_off
+                if day_off in days:
+                    offs_per_day[day_off] += 1
         
         return updated_roster, week_offs
     
@@ -380,10 +429,27 @@ class CallCenterRosterOptimizer:
         
         # Update split shift times for Revathi
         for idx in roster_df[revathi_mask].index:
-            pattern = (7, 12, 16, 21)  # 7-12 & 4-9
-            roster_df.at[idx, 'Start Time'] = f"{pattern[0]:02d}:00-{pattern[1]:02d}:00 & {pattern[2]:02d}:00-{pattern[3]:02d}:00"
-            roster_df.at[idx, 'End Time'] = f"{pattern[3]:02d}:00"
+            pattern = self.split_shift_patterns[0]  # Use the first pattern
+            roster_df.at[idx, 'Start Time'] = pattern['display']
+            roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
             roster_df.at[idx, 'Duration'] = '9 hours (with break)'
+        
+        return roster_df
+    
+    def apply_manual_splits(self, roster_df, manual_splits):
+        """Apply manual split shift assignments"""
+        for assignment in manual_splits:
+            champ = assignment['champion']
+            day = assignment['day']
+            pattern = assignment['pattern']
+            
+            # Find the row to update
+            mask = (roster_df['Champion'] == champ) & (roster_df['Day'] == day)
+            if mask.any():
+                roster_df.loc[mask, 'Shift Type'] = 'Split'
+                roster_df.loc[mask, 'Start Time'] = pattern['display']
+                roster_df.loc[mask, 'End Time'] = f"{pattern['times'][3]:02d}:00"
+                roster_df.loc[mask, 'Duration'] = '9 hours (with break)'
         
         return roster_df
     
@@ -401,12 +467,55 @@ class CallCenterRosterOptimizer:
             return filtered_roster
         else:
             return roster_df
+    
+    def format_roster_for_display(self, roster_df, week_offs):
+        """Format the roster in the sample Excel format"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        # Create a DataFrame in the sample format
+        display_df = pd.DataFrame()
+        display_df['Name'] = [champ['name'] for champ in self.champions if champ['name'] in roster_df['Champion'].unique()]
+        
+        # Add default shift pattern column
+        display_df['Shift'] = ""
+        
+        # Add columns for each day
+        for day in days:
+            display_df[day] = ""
+        
+        # Fill in the shifts for each day
+        for _, row in roster_df.iterrows():
+            champ_name = row['Champion']
+            day = row['Day']
+            shift_time = row['Start Time']
+            
+            # Find the row for this champion
+            champ_idx = display_df[display_df['Name'] == champ_name].index
+            if len(champ_idx) > 0:
+                display_df.at[champ_idx[0], day] = shift_time
+                
+                # Set the default shift pattern (most common shift)
+                if display_df.at[champ_idx[0], 'Shift'] == "":
+                    display_df.at[champ_idx[0], 'Shift'] = shift_time
+        
+        # Apply week offs
+        for champ, off_day in week_offs.items():
+            if off_day in days:
+                champ_idx = display_df[display_df['Name'] == champ].index
+                if len(champ_idx) > 0:
+                    display_df.at[champ_idx[0], off_day] = "WO"
+        
+        return display_df
 
 # Main application
 def main():
     st.markdown('<h1 class="main-header">📞 Call Center Roster Optimizer</h1>', unsafe_allow_html=True)
     
     optimizer = CallCenterRosterOptimizer()
+    
+    # Initialize session state
+    if 'manual_splits' not in st.session_state:
+        st.session_state.manual_splits = []
     
     # Sidebar configuration
     with st.sidebar:
@@ -448,6 +557,52 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # Manual split shift assignment
+        st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+        st.header("🔧 Manual Split Shift Assignment")
+        
+        st.markdown('<div class="split-shift-option">', unsafe_allow_html=True)
+        st.subheader("Assign Specific Split Shifts")
+        
+        # Champion selection
+        available_champs = [champ["name"] for champ in optimizer.champions]
+        selected_champ = st.selectbox("Select Champion", available_champs)
+        
+        # Day selection
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        selected_day = st.selectbox("Select Day", days)
+        
+        # Split shift pattern selection
+        pattern_options = [f"{pattern['name']} ({pattern['display']})" 
+                          for pattern in optimizer.split_shift_patterns]
+        selected_pattern_idx = st.selectbox("Select Split Shift Pattern", range(len(pattern_options)), format_func=lambda x: pattern_options[x])
+        
+        if st.button("➕ Add Manual Split Assignment"):
+            new_assignment = {
+                'champion': selected_champ,
+                'day': selected_day,
+                'pattern': optimizer.split_shift_patterns[selected_pattern_idx]
+            }
+            
+            # Check if this assignment already exists
+            if not any(a['champion'] == selected_champ and a['day'] == selected_day for a in st.session_state.manual_splits):
+                st.session_state.manual_splits.append(new_assignment)
+                st.success(f"Added split shift for {selected_champ} on {selected_day}")
+            else:
+                st.warning(f"{selected_champ} already has a manual split assignment on {selected_day}")
+        
+        # Show current manual assignments
+        if st.session_state.manual_splits:
+            st.subheader("Current Manual Assignments")
+            for i, assignment in enumerate(st.session_state.manual_splits):
+                st.write(f"{i+1}. {assignment['champion']} - {assignment['day']} - {assignment['pattern']['name']}")
+                if st.button(f"Remove {i+1}", key=f"remove_{i}"):
+                    st.session_state.manual_splits.pop(i)
+                    st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # File upload section
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("📊 Data Upload")
@@ -468,6 +623,7 @@ def main():
         - 📞 **14 hours** daily coverage
         - 🎯 **9-hour shifts** for all champions
         - 🔄 **Revathi** always assigned to split shifts
+        - 📋 Max 4 week offs per day to maintain answer rate
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -489,29 +645,32 @@ def main():
             if analysis_data:
                 st.session_state.analysis_data = analysis_data
                 st.metric("Daily Call Volume", f"{analysis_data['total_daily_calls']:,.0f}")
+                st.metric("Weekly Call Volume", f"{analysis_data['total_daily_calls'] * 7:,.0f}")
                 st.metric("Peak Hours", ", ".join([f"{h}:00" for h in analysis_data['peak_hours']]))
+        else:
+            # Use default data based on average
+            st.session_state.analysis_data = {
+                'hourly_volume': {
+                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
+                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
+                },
+                'peak_hours': [11, 12, 13, 14],
+                'total_daily_calls': 17500 / 7  # Based on your average
+            }
+            st.metric("Estimated Daily Calls", f"{17500 / 7:,.0f}")
+            st.metric("Estimated Weekly Calls", "17,500")
     
     with col2:
         st.header("🎯 Generate Roster")
         
         if st.button("🚀 Generate Optimized Roster", type="primary", use_container_width=True):
-            if 'analysis_data' not in st.session_state:
-                # Use default data if no file uploaded
-                st.session_state.analysis_data = {
-                    'hourly_volume': {
-                        7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                        13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
-                        18: 224.9, 19: 179.3, 20: 113.9, 21: 0
-                    },
-                    'peak_hours': [11, 12, 13, 14],
-                    'total_daily_calls': 2975
-                }
-            
             with st.spinner("Generating optimized roster..."):
                 roster_df, week_offs = optimizer.generate_roster(
                     straight_shifts, 
                     split_shifts, 
-                    st.session_state.analysis_data
+                    st.session_state.analysis_data,
+                    st.session_state.manual_splits
                 )
                 
                 # Apply split shift filter if enabled
@@ -531,8 +690,10 @@ def main():
                     st.session_state.answer_rate = answer_rate
                     st.session_state.daily_rates = daily_rates
                     
+                    # Format roster for display
+                    st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
+                    
                     st.success("✅ Roster generated successfully!")
-                    st.experimental_rerun()
         
         elif 'roster_df' in st.session_state:
             # Show previously generated roster
@@ -572,67 +733,33 @@ def main():
             week_off_df.index.name = 'Champion'
             week_off_df = week_off_df.reset_index()
             
+            # Count week offs per day
+            offs_per_day = week_off_df['Day Off'].value_counts()
+            st.write("Week Offs per Day:")
+            for day in days:
+                count = offs_per_day.get(day, 0)
+                st.write(f"{day}: {count} champions")
+            
             st.dataframe(
                 week_off_df,
                 use_container_width=True,
                 hide_index=True
             )
         
-        # Day selection for roster view
-        st.markdown('<div class="section-header"><h2>👥 Daily Roster Details</h2></div>', unsafe_allow_html=True)
+        # Display roster in sample format
+        st.markdown('<div class="section-header"><h2>📋 Roster Schedule</h2></div>', unsafe_allow_html=True)
         
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        selected_day = st.selectbox("Select Day to View Roster", days)
-        
-        # Display roster for selected day
-        day_df = st.session_state.roster_df[st.session_state.roster_df['Day'] == selected_day].copy()
-        
-        # Apply styling based on shift type
-        def color_shifts(row):
-            if row['Shift Type'] == 'Split':
-                return ['background-color: #e6f7ff'] * len(row)
-            else:
-                return ['background-color: #f0f8f0'] * len(row)
-        
-        # Display the roster with styling
-        if not day_df.empty:
-            st.dataframe(
-                day_df.drop('Day', axis=1).style.apply(color_shifts, axis=1),
-                use_container_width=True
-            )
-            
-            # Show summary for the day
-            day_capacity = 0
-            for _, row in day_df.iterrows():
-                if row['Shift Type'] == 'Straight':
-                    hours_worked = 9
-                else:
-                    shifts = row['Start Time'].split(' & ')
-                    hours_worked = 0
-                    for shift in shifts:
-                        start, end = shift.split('-')
-                        start_hour = int(start.split(':')[0])
-                        end_hour = int(end.split(':')[0])
-                        hours_worked += (end_hour - start_hour)
-                
-                day_capacity += row['Calls/Hour Capacity'] * hours_worked
-            
-            day_answer_rate = min(100, (day_capacity / st.session_state.analysis_data['total_daily_calls']) * 100)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric(f"{selected_day} Capacity", f"{day_capacity:,.0f} calls")
-            with col2:
-                st.metric(f"{selected_day} Required", f"{st.session_state.analysis_data['total_daily_calls']:,.0f} calls")
-            with col3:
-                st.metric(f"{selected_day} Answer Rate", f"{day_answer_rate:.1f}%")
+        st.dataframe(
+            st.session_state.formatted_roster,
+            use_container_width=True,
+            hide_index=True
+        )
         
         # Manual editing option
         st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
         
-        if st.checkbox("Enable manual editing"):
+        if st.checkbox("Enable manual editing of shift timings"):
             edited_roster = optimizer.show_editable_roster(st.session_state.roster_df)
-            st.session_state.edited_roster = edited_roster
             
             # Recalculate metrics after editing
             if st.button("Update Metrics after Editing"):
@@ -656,7 +783,8 @@ def main():
         # Download options
         st.markdown('<div class="section-header"><h2>💾 Download Options</h2></div>', unsafe_allow_html=True)
         
-        csv = st.session_state.roster_df.to_csv(index=False)
+        # Download in sample format
+        csv = st.session_state.formatted_roster.to_csv(index=False)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -671,7 +799,7 @@ def main():
             # Excel download
             excel_buffer = BytesIO()
             with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                st.session_state.roster_df.to_excel(writer, index=False, sheet_name='Roster')
+                st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
             excel_data = excel_buffer.getvalue()
             st.download_button(
                 "📥 Download as Excel",
