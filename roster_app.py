@@ -111,6 +111,27 @@ st.markdown("""
         margin-bottom: 1rem;
         border: 2px dashed #1f77b4;
     }
+    .al-critical {
+        background-color: #ffcccc;
+        color: #d93025;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+        font-weight: bold;
+    }
+    .al-warning {
+        background-color: #fff2cc;
+        color: #f9ab00;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+        font-weight: bold;
+    }
+    .al-good {
+        background-color: #e6f4ea;
+        color: #137333;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,6 +145,8 @@ class CallCenterRosterOptimizer:
             {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
             {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"}
         ]
+        self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
+        self.TARGET_AL = 90  # Your Goal Answer Level
         
     def load_champions(self):
         return [
@@ -156,6 +179,149 @@ class CallCenterRosterOptimizer:
             {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True},
             {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False}
         ]
+    
+    # ================================
+    # AL PREDICTION FUNCTIONS
+    # ================================
+    def calculate_hourly_capacity(self, num_agents, aht_seconds):
+        """Calculates how many calls a team can handle in one hour."""
+        hourly_capacity = (num_agents * 3600) / aht_seconds
+        return round(hourly_capacity)
+
+    def predict_al(self, forecasted_calls, num_agents, aht_seconds):
+        """Predicts the Answer Level (AL) for a given hour."""
+        capacity = self.calculate_hourly_capacity(num_agents, aht_seconds)
+        # In reality, you can't answer more calls than are offered
+        answered_calls = min(capacity, forecasted_calls)
+        predicted_al = (answered_calls / forecasted_calls) * 100
+        return round(predicted_al, 1), int(capacity)
+
+    def agents_needed_for_target(self, forecasted_calls, target_al, aht_seconds):
+        """Calculates the minimum number of agents required to hit a target AL."""
+        # Calculate the required capacity to meet the target
+        required_capacity = (target_al / 100) * forecasted_calls
+        # Calculate the agents needed to achieve that capacity
+        agents_required = (required_capacity * aht_seconds) / 3600
+        # Always round UP because you can't have a fraction of an agent
+        return np.ceil(agents_required)
+
+    def analyze_roster_sufficiency(self, forecasted_calls, scheduled_agents, aht_seconds, target_al):
+        """Analyzes if the scheduled roster is sufficient and recommends changes."""
+        predicted_al, capacity = self.predict_al(forecasted_calls, scheduled_agents, aht_seconds)
+        min_agents_required = self.agents_needed_for_target(forecasted_calls, target_al, aht_seconds)
+        
+        recommendation = {
+            'forecasted_calls': forecasted_calls,
+            'scheduled_agents': scheduled_agents,
+            'current_capacity': capacity,
+            'predicted_al': predicted_al,
+            'min_agents_required': min_agents_required,
+            'agents_deficit': max(0, min_agents_required - scheduled_agents),
+            'status': '',
+            'recommendation': ''
+        }
+        
+        # Determine status and recommendation
+        if predicted_al >= target_al:
+            recommendation['status'] = '✅ GREEN (Goal Met)'
+            recommendation['recommendation'] = 'Roster is sufficient to target.'
+            # Check for overstaffing
+            if scheduled_agents > min_agents_required + 1: # Buffer to avoid flip-flopping
+                recommendation['recommendation'] = f'Roster is strong. Potential to reduce by {int(scheduled_agents - min_agents_required)} agent(s).'
+        elif predicted_al >= 80:
+            recommendation['status'] = '🟡 YELLOW (Close to Goal)'
+            recommendation['recommendation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
+        elif predicted_al >= 70:
+            recommendation['status'] = '🟠 ORANGE (At Risk)'
+            recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
+        else:
+            recommendation['status'] = '🔴 RED (Critical)'
+            recommendation['recommendation'] = f'Immediately add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
+        
+        return recommendation
+
+    def generate_what_if_analysis(self, forecasted_calls, base_agents, aht_seconds, target_al):
+        """Generates a table showing the impact of adding/removing agents."""
+        scenarios = []
+        # Test from -3 to +5 agents around the current schedule
+        for agent_change in range(-3, 6):
+            agent_count = base_agents + agent_change
+            if agent_count < 1: continue  # Skip impossible scenarios
+            
+            al, cap = self.predict_al(forecasted_calls, agent_count, aht_seconds)
+            scenarios.append({
+                'Agent Change': f'{agent_change:+d}',
+                'Agents Scheduled': agent_count,
+                'Capacity': cap,
+                'Predicted AL': f'{al}%',
+                'Status': '✅ Meet Goal' if al >= target_al else '⚠️ Below Goal'
+            })
+        
+        return pd.DataFrame(scenarios)
+    
+    def calculate_hourly_al_analysis(self, roster_df, analysis_data):
+        """Calculate AL predictions for each hour of the day"""
+        if roster_df is None or analysis_data is None:
+            return None
+            
+        hourly_al_results = {}
+        
+        for hour in self.operation_hours:
+            if hour not in analysis_data['hourly_volume']:
+                continue
+                
+            # Count agents working at this hour
+            agents_at_hour = 0
+            for _, row in roster_df.iterrows():
+                if self.is_agent_working_at_hour(row, hour):
+                    agents_at_hour += 1
+            
+            # Predict AL for this hour
+            forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
+            if forecasted_calls > 0:
+                predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
+                hourly_al_results[hour] = {
+                    'agents': agents_at_hour,
+                    'forecast': forecasted_calls,
+                    'capacity': capacity,
+                    'predicted_al': predicted_al,
+                    'status': self.get_al_status(predicted_al)
+                }
+        
+        return hourly_al_results
+    
+    def is_agent_working_at_hour(self, row, hour):
+        """Check if an agent is working at a specific hour based on their shift"""
+        try:
+            if row['Shift Type'] == 'Straight':
+                # Parse straight shift times
+                times = row['Start Time'].split(' to ')
+                start_hour = int(times[0].split(':')[0])
+                end_hour = int(times[1].split(':')[0])
+                return start_hour <= hour < end_hour
+            else:
+                # Parse split shift times
+                shifts = row['Start Time'].split(' & ')
+                for shift in shifts:
+                    times = shift.split(' to ')
+                    start_hour = int(times[0].split(':')[0])
+                    end_hour = int(times[1].split(':')[0])
+                    if start_hour <= hour < end_hour:
+                        return True
+                return False
+        except:
+            return False
+    
+    def get_al_status(self, al_value):
+        """Get status classification for AL value"""
+        if al_value >= self.TARGET_AL:
+            return "✅ GOOD"
+        elif al_value >= 80:
+            return "🟡 WARNING"
+        elif al_value >= 70:
+            return "🟠 AT RISK"
+        else:
+            return "🔴 CRITICAL"
     
     def create_template_file(self):
         """Create a template Excel file for call volume data"""
@@ -744,6 +910,8 @@ def main():
         - 🎯 **9-hour shifts** for all champions
         - 🔄 **Revathi** always assigned to split shifts
         - 📋 Max 4 week offs per day to maintain answer rate
+        - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
+        - 🎯 **AL Target:** 90% Answer Level
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -806,9 +974,13 @@ def main():
                     answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
                     daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
                     
+                    # Calculate AL predictions
+                    hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, st.session_state.analysis_data)
+                    
                     st.session_state.metrics = metrics
                     st.session_state.answer_rate = answer_rate
                     st.session_state.daily_rates = daily_rates
+                    st.session_state.hourly_al_results = hourly_al_results
                     
                     # Format roster for display
                     st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
@@ -834,6 +1006,75 @@ def main():
             st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+        
+        # Display AL prediction metrics
+        st.markdown('<div class="section-header"><h2>🎯 AL Prediction Analysis</h2></div>', unsafe_allow_html=True)
+        
+        if 'hourly_al_results' in st.session_state and st.session_state.hourly_al_results:
+            # Create a summary of AL predictions
+            al_values = [hour_data['predicted_al'] for hour_data in st.session_state.hourly_al_results.values()]
+            avg_al = sum(al_values) / len(al_values) if al_values else 0
+            
+            # Count hours by status
+            status_counts = {
+                "✅ GOOD": 0,
+                "🟡 WARNING": 0,
+                "🟠 AT RISK": 0,
+                "🔴 CRITICAL": 0
+            }
+            
+            for hour_data in st.session_state.hourly_al_results.values():
+                status = hour_data['status']
+                if status in status_counts:
+                    status_counts[status] += 1
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Average Predicted AL", f"{avg_al:.1f}%")
+            with col2:
+                st.metric("Hours at Target", f"{status_counts['✅ GOOD']}")
+            with col3:
+                st.metric("Hours Needing Attention", f"{status_counts['🟡 WARNING'] + status_counts['🟠 AT RISK']}")
+            with col4:
+                st.metric("Critical Hours", f"{status_counts['🔴 CRITICAL']}")
+            
+            # Show detailed hourly AL predictions
+            st.subheader("Hourly AL Predictions")
+            al_data = []
+            for hour, data in st.session_state.hourly_al_results.items():
+                al_data.append({
+                    'Hour': f"{hour}:00",
+                    'Agents': data['agents'],
+                    'Forecasted Calls': data['forecast'],
+                    'Capacity': data['capacity'],
+                    'Predicted AL': f"{data['predicted_al']}%",
+                    'Status': data['status']
+                })
+            
+            al_df = pd.DataFrame(al_data)
+            st.dataframe(al_df, use_container_width=True, hide_index=True)
+            
+            # Identify critical hours that need extra champions
+            critical_hours = []
+            for hour, data in st.session_state.hourly_al_results.items():
+                if data['predicted_al'] < optimizer.TARGET_AL:
+                    agents_needed = optimizer.agents_needed_for_target(
+                        data['forecast'], optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
+                    )
+                    extra_agents = max(0, agents_needed - data['agents'])
+                    if extra_agents > 0:
+                        critical_hours.append({
+                            'Hour': f"{hour}:00",
+                            'Current Agents': data['agents'],
+                            'Agents Needed': int(agents_needed),
+                            'Extra Agents Needed': int(extra_agents),
+                            'Current AL': f"{data['predicted_al']}%"
+                        })
+            
+            if critical_hours:
+                st.subheader("⚠️ Hours Needing Extra Champions")
+                critical_df = pd.DataFrame(critical_hours)
+                st.dataframe(critical_df, use_container_width=True, hide_index=True)
         
         # Display daily answer rates
         st.markdown('<div class="section-header"><h2>📈 Daily Answer Rates</h2></div>', unsafe_allow_html=True)
@@ -886,6 +1127,7 @@ def main():
                 updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
                 updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
                 updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
+                updated_hourly_al = optimizer.calculate_hourly_al_analysis(edited_roster, st.session_state.analysis_data)
                 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
