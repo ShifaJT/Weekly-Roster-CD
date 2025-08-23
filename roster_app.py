@@ -260,33 +260,44 @@ class CallCenterRosterOptimizer:
         return pd.DataFrame(scenarios)
     
     def calculate_hourly_al_analysis(self, roster_df, analysis_data):
-        """Calculate AL predictions for each hour of the day"""
+        """Calculate AL predictions for each hour of each day"""
         if roster_df is None or analysis_data is None:
             return None
-            
+
+        # We'll create a structure for each day and each hour
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         hourly_al_results = {}
-        
-        for hour in self.operation_hours:
-            if hour not in analysis_data['hourly_volume']:
-                continue
-                
-            # Count agents working at this hour
-            agents_at_hour = 0
-            for _, row in roster_df.iterrows():
-                if self.is_agent_working_at_hour(row, hour):
-                    agents_at_hour += 1
+
+        for day in days:
+            # Filter roster for just this day
+            daily_roster = roster_df[roster_df['Day'] == day]
             
-            # Predict AL for this hour
-            forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
-            if forecasted_calls > 0:
-                predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
-                hourly_al_results[hour] = {
-                    'agents': agents_at_hour,
-                    'forecast': forecasted_calls,
-                    'capacity': capacity,
-                    'predicted_al': predicted_al,
-                    'status': self.get_al_status(predicted_al)
-                }
+            for hour in self.operation_hours:
+                if hour not in analysis_data['hourly_volume']:
+                    continue
+                    
+                # Count agents working at this hour ON THIS DAY
+                agents_at_hour = 0
+                for _, row in daily_roster.iterrows():
+                    if self.is_agent_working_at_hour(row, hour):
+                        agents_at_hour += 1
+                
+                # Predict AL for this hour
+                forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
+                if forecasted_calls > 0:
+                    predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
+                    
+                    # Store results with day and hour as key
+                    key = f"{day}_{hour}"
+                    hourly_al_results[key] = {
+                        'day': day,
+                        'hour': hour,
+                        'agents': agents_at_hour,
+                        'forecast': forecasted_calls,
+                        'capacity': capacity,
+                        'predicted_al': predicted_al,
+                        'status': self.get_al_status(predicted_al)
+                    }
         
         return hourly_al_results
     
@@ -1038,43 +1049,57 @@ def main():
             with col4:
                 st.metric("Critical Hours", f"{status_counts['🔴 CRITICAL']}")
             
-            # Show detailed hourly AL predictions
-            st.subheader("Hourly AL Predictions")
+            # Show detailed hourly AL predictions by day
+            st.subheader("Hourly AL Predictions by Day")
+            
+            # Let user select a day to view
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            selected_day = st.selectbox("Select day to view hourly AL predictions", days)
+            
+            # Filter results for the selected day
             al_data = []
-            for hour, data in st.session_state.hourly_al_results.items():
-                al_data.append({
-                    'Hour': f"{hour}:00",
-                    'Agents': data['agents'],
-                    'Forecasted Calls': data['forecast'],
-                    'Capacity': data['capacity'],
-                    'Predicted AL': f"{data['predicted_al']}%",
-                    'Status': data['status']
-                })
+            for key, data in st.session_state.hourly_al_results.items():
+                if data['day'] == selected_day:
+                    al_data.append({
+                        'Hour': f"{data['hour']:02d}:00",
+                        'Agents': data['agents'],
+                        'Forecasted Calls': int(data['forecast']),
+                        'Capacity': int(data['capacity']),
+                        'Predicted AL': f"{data['predicted_al']}%",
+                        'Status': data['status']
+                    })
             
-            al_df = pd.DataFrame(al_data)
-            st.dataframe(al_df, use_container_width=True, hide_index=True)
+            # Sort by hour
+            al_data.sort(key=lambda x: x['Hour'])
             
-            # Identify critical hours that need extra champions
-            critical_hours = []
-            for hour, data in st.session_state.hourly_al_results.items():
-                if data['predicted_al'] < optimizer.TARGET_AL:
-                    agents_needed = optimizer.agents_needed_for_target(
-                        data['forecast'], optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
-                    )
-                    extra_agents = max(0, agents_needed - data['agents'])
-                    if extra_agents > 0:
-                        critical_hours.append({
-                            'Hour': f"{hour}:00",
-                            'Current Agents': data['agents'],
-                            'Agents Needed': int(agents_needed),
-                            'Extra Agents Needed': int(extra_agents),
-                            'Current AL': f"{data['predicted_al']}%"
-                        })
-            
-            if critical_hours:
-                st.subheader("⚠️ Hours Needing Extra Champions")
-                critical_df = pd.DataFrame(critical_hours)
-                st.dataframe(critical_df, use_container_width=True, hide_index=True)
+            if al_data:
+                al_df = pd.DataFrame(al_data)
+                st.dataframe(al_df, use_container_width=True, hide_index=True)
+                
+                # Identify critical hours that need extra champions
+                critical_hours = []
+                for data in al_data:
+                    if float(data['Predicted AL'].replace('%', '')) < optimizer.TARGET_AL:
+                        forecast = next((item['forecast'] for item in al_data if item['Hour'] == data['Hour']), 0)
+                        agents_needed = optimizer.agents_needed_for_target(
+                            forecast, optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
+                        )
+                        extra_agents = max(0, agents_needed - data['Agents'])
+                        if extra_agents > 0:
+                            critical_hours.append({
+                                'Hour': data['Hour'],
+                                'Current Agents': data['Agents'],
+                                'Agents Needed': int(agents_needed),
+                                'Extra Agents Needed': int(extra_agents),
+                                'Current AL': data['Predicted AL']
+                            })
+                
+                if critical_hours:
+                    st.subheader("⚠️ Hours Needing Extra Champions")
+                    critical_df = pd.DataFrame(critical_hours)
+                    st.dataframe(critical_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No AL prediction data available for the selected day.")
         
         # Display daily answer rates
         st.markdown('<div class="section-header"><h2>📈 Daily Answer Rates</h2></div>', unsafe_allow_html=True)
