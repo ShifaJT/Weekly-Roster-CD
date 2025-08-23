@@ -621,8 +621,8 @@ class CallCenterRosterOptimizer:
         
         return daily_rates
     
-    def show_editable_roster(self, roster_df):
-        """Display an editable roster table"""
+    def show_editable_roster(self, roster_df, week_offs):
+        """Display an editable roster table with week offs"""
         st.subheader("✏️ Edit Roster Manually")
         
         # Create a copy for editing
@@ -652,7 +652,44 @@ class CallCenterRosterOptimizer:
             use_container_width=True
         )
         
-        return edited_df
+        # Show week offs for manual editing
+        st.subheader("📅 Edit Weekly Offs")
+        week_off_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        week_off_editor_data = []
+        for champ, off_day in week_offs.items():
+            week_off_editor_data.append({
+                "Champion": champ,
+                "Current Day Off": off_day if off_day in week_off_days else "No day off"
+            })
+        
+        week_off_df = pd.DataFrame(week_off_editor_data)
+        
+        edited_week_offs = st.data_editor(
+            week_off_df,
+            column_config={
+                "Champion": st.column_config.SelectboxColumn(
+                    "Champion",
+                    options=[champ["name"] for champ in self.champions],
+                    required=True
+                ),
+                "Current Day Off": st.column_config.SelectboxColumn(
+                    "Day Off",
+                    options=week_off_days + ["No day off"],
+                    required=True
+                )
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        # Convert back to dictionary format
+        new_week_offs = {}
+        for _, row in edited_week_offs.iterrows():
+            if row["Current Day Off"] != "No day off":
+                new_week_offs[row["Champion"]] = row["Current Day Off"]
+        
+        return edited_df, new_week_offs
     
     def assign_weekly_offs(self, roster_df, max_offs_per_day=4):
         """Assign weekly off days to champions with limit per day"""
@@ -1023,7 +1060,11 @@ def main():
         
         if 'hourly_al_results' in st.session_state and st.session_state.hourly_al_results:
             # Create a summary of AL predictions
-            al_values = [hour_data['predicted_al'] for hour_data in st.session_state.hourly_al_results.values()]
+            al_values = []
+            for key, hour_data in st.session_state.hourly_al_results.items():
+                if 'predicted_al' in hour_data:
+                    al_values.append(hour_data['predicted_al'])
+            
             avg_al = sum(al_values) / len(al_values) if al_values else 0
             
             # Count hours by status
@@ -1034,10 +1075,11 @@ def main():
                 "🔴 CRITICAL": 0
             }
             
-            for hour_data in st.session_state.hourly_al_results.values():
-                status = hour_data['status']
-                if status in status_counts:
-                    status_counts[status] += 1
+            for key, hour_data in st.session_state.hourly_al_results.items():
+                if 'status' in hour_data:
+                    status = hour_data['status']
+                    if status in status_counts:
+                        status_counts[status] += 1
             
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -1059,7 +1101,7 @@ def main():
             # Filter results for the selected day
             al_data = []
             for key, data in st.session_state.hourly_al_results.items():
-                if data['day'] == selected_day:
+                if 'day' in data and data['day'] == selected_day:
                     al_data.append({
                         'Hour': f"{data['hour']:02d}:00",
                         'Agents': data['agents'],
@@ -1144,8 +1186,14 @@ def main():
         # Manual editing option
         st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
         
-        if st.checkbox("Enable manual editing of shift timings"):
-            edited_roster = optimizer.show_editable_roster(st.session_state.roster_df)
+        if st.checkbox("Enable manual editing of shift timings and week offs"):
+            edited_roster, edited_week_offs = optimizer.show_editable_roster(
+                st.session_state.roster_df, st.session_state.week_offs
+            )
+            
+            # Update session state with edited values
+            st.session_state.roster_df = edited_roster
+            st.session_state.week_offs = edited_week_offs
             
             # Recalculate metrics after editing
             if st.button("Update Metrics after Editing"):
