@@ -143,10 +143,13 @@ class CallCenterRosterOptimizer:
             {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00"},
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
             {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
-            {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"}
+            {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
+            # NEW: Add patterns specifically for late coverage
+            {"name": "12-5 & 6-9", "times": (12, 17, 18, 21), "display": "12:00 to 17:00 & 18:00 to 21:00"},
+            {"name": "1-6 & 7-9", "times": (13, 18, 19, 21), "display": "13:00 to 18:00 & 19:00 to 21:00"}
         ]
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
-        self.TARGET_AL = 90  # Your Goal Answer Level
+        self.TARGET_AL = 80  # Changed from 90 to 80 as requested
         
     def load_champions(self):
         return [
@@ -517,9 +520,15 @@ class CallCenterRosterOptimizer:
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
             })
         
-        # Split shifts (for remaining champions)
+        # Split shifts (for remaining champions) - prioritize late coverage patterns
+        late_coverage_patterns = [p for p in self.split_shift_patterns if p['times'][2] >= 17]  # Patterns that start at 5 PM or later
+
         for i, champ in enumerate(champions[straight_shifts:straight_shifts + split_shifts]):
-            pattern = self.split_shift_patterns[i % len(self.split_shift_patterns)]
+            # Prefer late coverage patterns for better AL during critical hours
+            if i < len(late_coverage_patterns):
+                pattern = late_coverage_patterns[i]
+            else:
+                pattern = self.split_shift_patterns[i % len(self.split_shift_patterns)]
             
             daily_roster.append({
                 'Day': day,
@@ -959,7 +968,7 @@ def main():
         - 🔄 **Revathi** always assigned to split shifts
         - 📋 Max 4 week offs per day to maintain answer rate
         - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
-        - 🎯 **AL Target:** 90% Answer Level
+        - 🎯 **AL Target:** 80% Answer Level
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1122,9 +1131,15 @@ def main():
                 critical_hours = []
                 for data in al_data:
                     if float(data['Predicted AL'].replace('%', '')) < optimizer.TARGET_AL:
-                        forecast = next((item['forecast'] for item in al_data if item['Hour'] == data['Hour']), 0)
+                        # FIXED: Use a safer approach to get forecast
+                        forecast_value = 0
+                        for item in al_data:
+                            if 'Hour' in item and 'Forecasted Calls' in item and str(item['Hour']) == str(data['Hour']):
+                                forecast_value = item['Forecasted Calls']
+                                break
+                        
                         agents_needed = optimizer.agents_needed_for_target(
-                            forecast, optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
+                            forecast_value, optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
                         )
                         extra_agents = max(0, agents_needed - data['Agents'])
                         if extra_agents > 0:
@@ -1140,6 +1155,29 @@ def main():
                     st.subheader("⚠️ Hours Needing Extra Champions")
                     critical_df = pd.DataFrame(critical_hours)
                     st.dataframe(critical_df, use_container_width=True, hide_index=True)
+                    
+                    # ADD RECOMMENDATIONS FOR LATE HOUR COVERAGE
+                    st.subheader("🎯 Recommendations for Late Hour Coverage")
+                    
+                    # Analyze late hours specifically (17:00-20:00)
+                    late_hour_critical = []
+                    for data in al_data:
+                        hour_num = int(data['Hour'].split(':')[0])
+                        if 17 <= hour_num <= 20 and float(data['Predicted AL'].replace('%', '')) < optimizer.TARGET_AL:
+                            late_hour_critical.append(data)
+                    
+                    if late_hour_critical:
+                        st.warning("**Critical late-hour coverage issues detected (5 PM - 9 PM):**")
+                        for hour_data in late_hour_critical:
+                            st.write(f"- {hour_data['Hour']}: {hour_data['Predicted AL']} AL ({hour_data['Agents']} agents)")
+                        
+                        st.info("""
+                        **Recommended Actions:**
+                        1. Assign more split shifts with late coverage (5 PM - 9 PM)
+                        2. Consider adding a dedicated late shift (1 PM - 9 PM)
+                        3. Limit week-offs during late hours
+                        4. Use the new '12-5 & 6-9' split shift pattern for better coverage
+                        """)
             else:
                 st.info("No AL prediction data available for the selected day.")
         
