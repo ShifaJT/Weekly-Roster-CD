@@ -146,7 +146,10 @@ class CallCenterRosterOptimizer:
             {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
             # NEW: Add patterns specifically for late coverage
             {"name": "12-5 & 6-9", "times": (12, 17, 18, 21), "display": "12:00 to 17:00 & 18:00 to 21:00"},
-            {"name": "1-6 & 7-9", "times": (13, 18, 19, 21), "display": "13:00 to 18:00 & 19:00 to 21:00"}
+            {"name": "1-6 & 7-9", "times": (13, 18, 19, 21), "display": "13:00 to 18:00 & 19:00 to 21:00"},
+            # NEW: Dedicated late shifts
+            {"name": "2-9", "times": (14, 21), "display": "14:00 to 21:00"},
+            {"name": "3-9", "times": (15, 21), "display": "15:00 to 21:00"}
         ]
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
         self.TARGET_AL = 80  # Changed from 90 to 80 as requested
@@ -521,12 +524,20 @@ class CallCenterRosterOptimizer:
             })
         
         # Split shifts (for remaining champions) - prioritize late coverage patterns
-        late_coverage_patterns = [p for p in self.split_shift_patterns if p['times'][2] >= 17]  # Patterns that start at 5 PM or later
+        late_coverage_patterns = [p for p in self.split_shift_patterns if p['times'][-1] >= 21]  # Patterns that end at 9 PM or later
 
+        # Ensure at least 3 mid shift and 3 split shift agents for late hours
+        mid_shift_count = min(3, split_shifts // 2)
+        split_shift_count = min(3, split_shifts - mid_shift_count)
+        
         for i, champ in enumerate(champions[straight_shifts:straight_shifts + split_shifts]):
-            # Prefer late coverage patterns for better AL during critical hours
-            if i < len(late_coverage_patterns):
-                pattern = late_coverage_patterns[i]
+            # First assign mid shifts for late coverage
+            if i < mid_shift_count:
+                pattern = self.split_shift_patterns[1]  # 8-1 & 5-9 pattern
+            # Then assign dedicated late shifts
+            elif i < mid_shift_count + split_shift_count:
+                pattern = self.split_shift_patterns[-1]  # 3-9 pattern (dedicated late shift)
+            # Then use other patterns for remaining agents
             else:
                 pattern = self.split_shift_patterns[i % len(self.split_shift_patterns)]
             
@@ -537,7 +548,7 @@ class CallCenterRosterOptimizer:
                 'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
                 'Shift Type': 'Split',
                 'Start Time': pattern['display'],
-                'End Time': f"{pattern['times'][3]:02d}:00",
+                'End Time': f"{pattern['times'][-1]:02d}:00",
                 'Duration': '9 hours (with break)',
                 'Calls/Hour Capacity': champ['calls_per_hour'],
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
@@ -753,7 +764,7 @@ class CallCenterRosterOptimizer:
         
         # Update split shift times for Revathi
         for idx in roster_df[revathi_mask].index:
-            pattern = self.split_shift_patterns[0]  # Use the first pattern
+            pattern = self.split_shift_patterns[1]  # Use the 8-1 & 5-9 pattern for Revathi
             roster_df.at[idx, 'Start Time'] = pattern['display']
             roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
             roster_df.at[idx, 'Duration'] = '9 hours (with break)'
@@ -772,7 +783,7 @@ class CallCenterRosterOptimizer:
             if mask.any():
                 roster_df.loc[mask, 'Shift Type'] = 'Split'
                 roster_df.loc[mask, 'Start Time'] = pattern['display']
-                roster_df.loc[mask, 'End Time'] = f"{pattern['times'][3]:02d}:00"
+                roster_df.loc[mask, 'End Time'] = f"{pattern['times'][-1]:02d}:00"
                 roster_df.loc[mask, 'Duration'] = '9 hours (with break)'
         
         return roster_df
@@ -830,6 +841,51 @@ class CallCenterRosterOptimizer:
                     display_df.at[champ_idx[0], off_day] = "WO"
         
         return display_df
+
+    def calculate_late_hour_coverage(self, roster_df):
+        """Calculate how many agents are available during late hours (5 PM - 9 PM)"""
+        if roster_df is None:
+            return None
+            
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        late_hour_coverage = {day: {"mid_shift": 0, "split_shift": 0, "total": 0} for day in days}
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            for _, row in day_roster.iterrows():
+                # Check if agent works during late hours (5 PM - 9 PM)
+                if self.is_agent_working_at_late_hours(row):
+                    if "&" in row['Start Time']:  # Split shift
+                        late_hour_coverage[day]["split_shift"] += 1
+                    else:  # Straight shift that covers late hours
+                        late_hour_coverage[day]["mid_shift"] += 1
+                    late_hour_coverage[day]["total"] += 1
+        
+        return late_hour_coverage
+    
+    def is_agent_working_at_late_hours(self, row):
+        """Check if an agent is working during late hours (5 PM - 9 PM)"""
+        try:
+            if row['Shift Type'] == 'Straight':
+                # Parse straight shift times
+                times = row['Start Time'].split(' to ')
+                start_hour = int(times[0].split(':')[0])
+                end_hour = int(times[1].split(':')[0])
+                # Check if shift covers any part of 5 PM - 9 PM
+                return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
+            else:
+                # Parse split shift times
+                shifts = row['Start Time'].split(' & ')
+                for shift in shifts:
+                    times = shift.split(' to ')
+                    start_hour = int(times[0].split(':')[0])
+                    end_hour = int(times[1].split(':')[0])
+                    # Check if this part of shift covers any part of 5 PM - 9 PM
+                    if start_hour <= 17 < end_hour or start_hour < 21 <= end_hour:
+                        return True
+                return False
+        except:
+            return False
 
 # Main application
 def main():
@@ -969,6 +1025,7 @@ def main():
         - 📋 Max 4 week offs per day to maintain answer rate
         - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
         - 🎯 **AL Target:** 80% Answer Level
+        - 👥 **Late Hour Coverage:** Minimum 3 mid-shift + 3 split-shift agents during 5 PM - 9 PM
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1034,10 +1091,14 @@ def main():
                     # Calculate AL predictions
                     hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, st.session_state.analysis_data)
                     
+                    # Calculate late hour coverage
+                    late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
+                    
                     st.session_state.metrics = metrics
                     st.session_state.answer_rate = answer_rate
                     st.session_state.daily_rates = daily_rates
                     st.session_state.hourly_al_results = hourly_al_results
+                    st.session_state.late_hour_coverage = late_hour_coverage
                     
                     # Format roster for display
                     st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
@@ -1063,6 +1124,38 @@ def main():
             st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+        
+        # Display late hour coverage
+        st.markdown('<div class="section-header"><h2>👥 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
+        
+        if 'late_hour_coverage' in st.session_state:
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            coverage_data = []
+            
+            for day in days:
+                coverage = st.session_state.late_hour_coverage.get(day, {"mid_shift": 0, "split_shift": 0, "total": 0})
+                coverage_data.append({
+                    "Day": day,
+                    "Mid Shift Agents": coverage["mid_shift"],
+                    "Split Shift Agents": coverage["split_shift"],
+                    "Total Agents": coverage["total"],
+                    "Status": "✅ Sufficient" if coverage["mid_shift"] >= 3 and coverage["split_shift"] >= 3 else "⚠️ Needs Attention"
+                })
+            
+            coverage_df = pd.DataFrame(coverage_data)
+            st.dataframe(coverage_df, use_container_width=True, hide_index=True)
+            
+            # Check if any day has insufficient coverage
+            insufficient_days = [day for day in coverage_data if day["Status"] == "⚠️ Needs Attention"]
+            if insufficient_days:
+                st.warning(f"⚠️ {len(insufficient_days)} days have insufficient late hour coverage!")
+                st.info("""
+                **Recommendations to improve late hour coverage:**
+                1. Increase the number of split shifts
+                2. Assign more agents to patterns that cover late hours (5 PM - 9 PM)
+                3. Use the manual assignment feature to ensure key agents work during late hours
+                4. Consider adding dedicated late shifts (2-9 PM or 3-9 PM)
+                """)
         
         # Display AL prediction metrics
         st.markdown('<div class="section-header"><h2>🎯 AL Prediction Analysis</h2></div>', unsafe_allow_html=True)
@@ -1239,6 +1332,7 @@ def main():
                 updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
                 updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
                 updated_hourly_al = optimizer.calculate_hourly_al_analysis(edited_roster, st.session_state.analysis_data)
+                updated_late_hour_coverage = optimizer.calculate_late_hour_coverage(edited_roster)
                 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
