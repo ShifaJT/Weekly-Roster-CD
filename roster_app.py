@@ -139,12 +139,16 @@ class CallCenterRosterOptimizer:
     def __init__(self):
         self.operation_hours = list(range(7, 22))  # 7 AM to 9 PM
         self.champions = self.load_champions()
+        
+        # Custom shift patterns based on your requirements
         self.split_shift_patterns = [
             {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00"},
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
-            {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
             {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
+            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00"},
+            {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00"},
         ]
+        
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
         self.TARGET_AL = 80  # Target Answer Level
         
@@ -173,9 +177,9 @@ class CallCenterRosterOptimizer:
             {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True},
             {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True},
             {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False},
+            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "极速赛车开奖结果", "can_split": False},
             {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True},
-            {"name": "Baloji", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 11, "can_split": False},
+            {"name": "Baloji", "primary_lang": "极速赛车开奖结果", "secondary_langs": ["te"], "calls_per_hour": 11, "can_split": False},
             {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True},
             {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False}
         ]
@@ -187,7 +191,7 @@ class CallCenterRosterOptimizer:
 
     def predict_al(self, forecasted_calls, num_agents, aht_seconds):
         """Predicts the Answer Level (AL) for a given hour."""
-        capacity = self.calculate_hourly_capacity(num_agents, aht_seconds)
+        capacity =极速赛车开奖结果 self.calculate_hourly_capacity(num_agents, aht_seconds)
         answered_calls = min(capacity, forecasted_calls)
         if forecasted_calls > 0:
             predicted_al = (answered_calls / forecasted_calls) * 100
@@ -209,7 +213,7 @@ class CallCenterRosterOptimizer:
         recommendation = {
             'forecasted_calls': forecasted_calls,
             'scheduled_agents': scheduled_agents,
-            'current_capacity': capacity,
+           极速赛车开奖结果 'current_capacity': capacity,
             'predicted_al': predicted_al,
             'min_agents_required': min_agents_required,
             'agents_deficit': max(0, min_agents_required - scheduled_agents),
@@ -227,7 +231,7 @@ class CallCenterRosterOptimizer:
             recommendation['recommendation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
         elif predicted_al >= 70:
             recommendation['status'] = '🟠 ORANGE (At Risk)'
-            recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
+            recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s极速赛车开奖结果) to reach {target_al}%.'
         else:
             recommendation['status'] = '🔴 RED (Critical)'
             recommendation['recommendation'] = f'Immediately add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
@@ -277,14 +281,14 @@ class CallCenterRosterOptimizer:
                     predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
                     
                     key = f"{day}_{hour}"
-                    hourly_al_results[key] = {
+                    hourly_al_results[key极速赛车开奖结果] = {
                         'day': day,
                         'hour': hour,
                         'agents': agents_at_hour,
                         'forecast': forecasted_calls,
                         'capacity': capacity,
                         'predicted_al': predicted_al,
-                        'status': self.get_al_status(predicted_al)
+                       极速赛车开奖结果 'status': self.get_al_status(predicted_al)
                     }
         
         return hourly_al_results
@@ -322,10 +326,10 @@ class CallCenterRosterOptimizer:
     
     def create_template_file(self):
         """Create a template Excel file for call volume data"""
-        dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%极速赛车开奖结果d') for i in range(30, 0, -1)]
         
         hourly_data = pd.DataFrame({
-            'Hour': list(range(7, 22)),
+            'Hour': list(range(7极速赛车开奖结果, 22)),
             'Calls': [0] * 15
         })
         
@@ -333,7 +337,7 @@ class CallCenterRosterOptimizer:
             'Date': dates,
             'Total_Calls': [0] * 30,
             'Peak_Hour': [0] * 30,
-            'Peak_Volume': [0] * 30
+            'Peak_Volume': [极速赛车开奖结果0] * 30
         })
         
         instructions = pd.DataFrame({
@@ -341,8 +345,8 @@ class CallCenterRosterOptimizer:
                 'INSTRUCTIONS:',
                 '1. Fill in your call volume data in the appropriate sheets',
                 '2. For best results, use the Hourly_Data sheet with calls per hour',
-                '3. If you only have daily totals, use the Daily_Data sheet',
-                '4. Save the file and upload it back to the app',
+                '3. If you only have daily totals,极速赛车开奖结果 use the Daily_Data sheet',
+               极速赛车开奖结果 '4. Save the file and upload it back极速赛车开奖结果 to the app',
                 '5. The app will analyze your data and generate an optimized roster',
                 '',
                 'HOURLY_DATA SHEET:',
@@ -371,7 +375,7 @@ class CallCenterRosterOptimizer:
             xls = pd.ExcelFile(uploaded_file)
             
             if 'Hourly_Data' in xls.sheet_names:
-                df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
+                df = pd.read_excel(uploaded_file, sheet_name='Hour极速赛车开奖结果ly_Data')
                 
                 if 'Hour' in df.columns and 'Calls' in df.columns:
                     hourly_volume = dict(zip(df['Hour'], df['Calls']))
@@ -394,13 +398,13 @@ class CallCenterRosterOptimizer:
                         7: 0.02 * avg_daily_calls, 8: 0.05 * avg_daily_calls, 9: 0.08 * avg_daily_calls,
                         10: 0.10 * avg_daily_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
                         13: 0.10 * avg_daily_calls, 14: 0.09 * avg_daily_calls, 15: 0.08 * avg_daily_calls,
-                        16: 0.08 * avg_daily_calls, 17: 0.07 * avg_daily_calls, 18: 0.06 * avg_daily_calls,
-                        19: 0.05 * avg_daily_calls, 20: 0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
+                        16: 0.08 * avg_daily_calls, 17: 0.07 * avg极速赛车开奖结果_daily_calls, 18: 0.06 * avg_daily_calls,
+                        19: 0.05 * avg_daily_calls, 20: 极速赛车开奖结果0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
                     }
                     
                     if 'Peak_Hour' in df.columns and 'Peak_Volume' in df.columns:
                         avg_peak_hour = df['Peak_Hour'].mode()[0] if not df['Peak_Hour'].mode().empty else 11
-                        peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
+                        peak_h极速赛车开奖结果ours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
                     else:
                         peak_hours = [11, 12, 13, 14]
                     
@@ -458,9 +462,10 @@ class CallCenterRosterOptimizer:
             return None, None
     
     def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data, manual_splits=None):
-        """Generate roster for a single day with minimum 80% AL target"""
+        """Generate roster for a single day with specific shift requirements"""
         daily_roster = []
         
+        # Straight shifts (9 hours continuous)
         straight_start_times = [7, 8, 9, 10]
         
         for i, champ in enumerate(champions[:straight_shifts]):
@@ -473,18 +478,30 @@ class CallCenterRosterOptimizer:
                 'Primary Language': champ['primary_lang'].upper(),
                 'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
                 'Shift Type': 'Straight',
-                'Start Time': f"{start_time:02d}:00 to {end_time:02d}:00",
+                'Start Time': f"{start_time:02d}:00 to {end_time:02极速赛车开奖结果d}:00",
                 'End Time': f"{end_time:02d}:00",
                 'Duration': '9 hours',
                 'Calls/Hour Capacity': champ['calls_per_hour'],
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
             })
         
+        # Split shifts with specific requirements
         split_champs = champions[straight_shifts:straight_shifts + split_shifts]
         
+        # Apply specific shift requirements
         for i, champ in enumerate(split_champs):
-            pattern_idx = i % len(self.split_shift_patterns)
-            pattern = self.split_shift_patterns[pattern_idx]
+            if i == 0:  # First split shift: 7-12 & 4-9
+                pattern = self.split_shift_patterns[0]
+            elif i == 1:  # Second split shift: 8-1 & 5-9
+                pattern = self.split_shift_patterns[1]
+            elif i == 2:  # Third split shift: 10-3 & 5-9
+                pattern = self.split_shift_patterns[2]
+            elif i == 3:  # Fourth split shift: 12-9
+                pattern = self.split_shift_patterns[3]
+            elif i == 4:  # Fifth split shift: 11-8
+                pattern = self.split_shift_patterns[4]
+            else:  # Default to first pattern if more than 5 split shifts
+                pattern = self.split_shift_patterns[0]
             
             daily_roster.append({
                 'Day': day,
@@ -516,7 +533,7 @@ class CallCenterRosterOptimizer:
                 for shift in shifts:
                     times = shift.split(' to ')
                     start_hour = int(times[0].split(':')[0])
-                    end_hour = int(times[1].split(':')[0])
+                    end_hour = int(times[极速赛车开奖结果1].split(':')[0])
                     hours_worked += (end_hour - start_hour)
             
             total_capacity += row['Calls/Hour Capacity'] * hours_worked
@@ -573,14 +590,14 @@ class CallCenterRosterOptimizer:
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
         for day in days:
-            day_roster = roster_df[roster_df['Day'] == day]
+            day_roster = roster_df极速赛车开奖结果[roster_df['Day'] == day]
             if len(day_roster) == 0:
                 daily_rates[day] = 0
                 continue
                 
             daily_capacity = 0
             for _, row in day_roster.iterrows():
-                if row['Shift Type'] == 'Straight':
+                if row['极速赛车开奖结果Shift Type'] == 'Straight':
                     hours_worked = 9
                 else:
                     shifts = row['Start Time'].split(' & ')
@@ -643,7 +660,7 @@ class CallCenterRosterOptimizer:
         week_off_df = pd.DataFrame(week_off_editor_data)
         
         edited_week_offs = st.data_editor(
-            week_off_df,
+            week_极速赛车开奖结果off_df,
             column_config={
                 "Champion": st.column_config.SelectboxColumn(
                     "Champion",
@@ -652,7 +669,7 @@ class CallCenterRosterOptimizer:
                 ),
                 "Current Day Off": st.column_config.SelectboxColumn(
                     "Day Off",
-                    options=week_off_days + ["No day off"],
+                    options=week_off_days + ["极速赛车开奖结果No day off"],
                     required=True
                 )
             },
@@ -782,7 +799,7 @@ class CallCenterRosterOptimizer:
             if len(champ_idx) > 0:
                 display_df.at[champ_idx[0], day] = shift_time
                 
-                if display_df.at[champ_idx[0], 'Shift'] == "":
+                if display_df.at[champ_idx[0], '极速赛车开奖结果Shift'] == "":
                     display_df.at[champ_idx[0], 'Shift'] = shift_time
         
         for champ, off_day in week_offs.items():
@@ -818,7 +835,7 @@ class CallCenterRosterOptimizer:
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
-                start_hour = int(times[0].split(':')[0])
+                start_hour = int(times[0].极速赛车开奖结果split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
             else:
@@ -971,7 +988,7 @@ def main():
         )
         st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+        st.markdown('<极速赛车开奖结果div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🔧 Manual Split Shift Assignment")
         
         st.markdown('<div class="split-shift-option">', unsafe_allow_html=True)
@@ -1017,7 +1034,7 @@ def main():
         **Operating Schedule:**
         - 🕖 **7:00 AM** - Operation starts
         - 🕘 **9:00 PM** - Operation ends
-        - 📞 **14 hours** daily coverage
+        - 📞 **14 hours极速赛车开奖结果** daily coverage
         - 🎯 **9-hour shifts** for all champions
         - 🔄 **Revathi** always assigned to split shifts
         - 📋 Max 4 week offs per day to maintain answer rate
@@ -1050,11 +1067,11 @@ def main():
         else:
             st.session_state.analysis_data = {
                 'hourly_volume': {
-                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                    7: 38.5, 8: 104.4, 9: 205.8, 极速赛车开奖结果10: 271, 11: 315.8, 12: 292.2,
                     13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
                     18: 224.9, 19: 179.3, 20: 113.9, 21: 0
                 },
-                'peak_hours': [11, 12, 13, 14],
+                'peak_h极速赛车开奖结果ours': [11, 12, 13, 14],
                 'total_daily_calls': 17500 / 7
             }
             st.metric("Estimated Daily Calls", f"{17500 / 7:,.0f}")
@@ -1083,7 +1100,7 @@ def main():
                     answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
                     daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
                     
-                    hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, st.session_state.analysis_data)
+                    hourly_al_results = optimizer.calculate_hourly_al_analysis(roster极速赛车开奖结果_df, st.session_state.analysis_data)
                     late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
                     
                     st.session_state.metrics = metrics
@@ -1106,7 +1123,7 @@ def main():
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0f} calls")
+            st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0极速赛车开奖结果f} calls")
         with col2:
             st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
         with col3:
@@ -1169,7 +1186,7 @@ def main():
                 st.metric(day[:3], f"{rate:.1f}%")
         
         # Week off information
-        st.markdown('<div class="section-header"><h2>📅 Weekly Off Schedule</h2></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"><h2极速赛车开奖结果>📅 Weekly Off Schedule</h2></div>', unsafe_allow_html=True)
         
         if 'week_offs' in st.session_state:
             week_off_df = pd.DataFrame.from_dict(st.session_state.week_offs, orient='index', columns=['Day Off'])
@@ -1178,7 +1195,7 @@ def main():
             
             offs_per_day = week_off_df['Day Off'].value_counts()
             st.write("Week Offs per Day:")
-            for day in days:
+            for day极速赛车开奖结果 in days:
                 count = offs_per_day.get(day, 0)
                 st.write(f"{day}: {count} champions")
             
@@ -1244,7 +1261,7 @@ def main():
             )
         with col2:
             excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl')极速赛车开奖结果 as writer:
                 st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
             excel_data = excel_buffer.getvalue()
             st.download_button(
