@@ -144,15 +144,10 @@ class CallCenterRosterOptimizer:
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
             {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
             {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
-            # NEW: Add patterns specifically for late coverage
             {"name": "12-5 & 6-9", "times": (12, 17, 18, 21), "display": "12:00 to 17:00 & 18:00 to 21:00"},
-            {"name": "1-6 & 7-9", "times": (13, 18, 19, 21), "display": "13:00 to 18:00 & 19:00 to 21:00"},
-            # NEW: Dedicated late shifts
-            {"name": "2-9", "times": (14, 21), "display": "14:00 to 21:00"},
-            {"name": "3-9", "times": (15, 21), "display": "15:00 to 21:00"}
         ]
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
-        self.TARGET_AL = 80  # Changed from 90 to 80 as requested
+        self.TARGET_AL = 80  # Target Answer Level
         
     def load_champions(self):
         return [
@@ -186,9 +181,6 @@ class CallCenterRosterOptimizer:
             {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False}
         ]
     
-    # ================================
-    # AL PREDICTION FUNCTIONS
-    # ================================
     def calculate_hourly_capacity(self, num_agents, aht_seconds):
         """Calculates how many calls a team can handle in one hour."""
         hourly_capacity = (num_agents * 3600) / aht_seconds
@@ -197,18 +189,17 @@ class CallCenterRosterOptimizer:
     def predict_al(self, forecasted_calls, num_agents, aht_seconds):
         """Predicts the Answer Level (AL) for a given hour."""
         capacity = self.calculate_hourly_capacity(num_agents, aht_seconds)
-        # In reality, you can't answer more calls than are offered
         answered_calls = min(capacity, forecasted_calls)
-        predicted_al = (answered_calls / forecasted_calls) * 100
+        if forecasted_calls > 0:
+            predicted_al = (answered_calls / forecasted_calls) * 100
+        else:
+            predicted_al = 100
         return round(predicted_al, 1), int(capacity)
 
     def agents_needed_for_target(self, forecasted_calls, target_al, aht_seconds):
         """Calculates the minimum number of agents required to hit a target AL."""
-        # Calculate the required capacity to meet the target
         required_capacity = (target_al / 100) * forecasted_calls
-        # Calculate the agents needed to achieve that capacity
         agents_required = (required_capacity * aht_seconds) / 3600
-        # Always round UP because you can't have a fraction of an agent
         return np.ceil(agents_required)
 
     def analyze_roster_sufficiency(self, forecasted_calls, scheduled_agents, aht_seconds, target_al):
@@ -227,12 +218,10 @@ class CallCenterRosterOptimizer:
             'recommendation': ''
         }
         
-        # Determine status and recommendation
         if predicted_al >= target_al:
             recommendation['status'] = '✅ GREEN (Goal Met)'
             recommendation['recommendation'] = 'Roster is sufficient to target.'
-            # Check for overstaffing
-            if scheduled_agents > min_agents_required + 1: # Buffer to avoid flip-flopping
+            if scheduled_agents > min_agents_required + 1:
                 recommendation['recommendation'] = f'Roster is strong. Potential to reduce by {int(scheduled_agents - min_agents_required)} agent(s).'
         elif predicted_al >= 80:
             recommendation['status'] = '🟡 YELLOW (Close to Goal)'
@@ -249,10 +238,9 @@ class CallCenterRosterOptimizer:
     def generate_what_if_analysis(self, forecasted_calls, base_agents, aht_seconds, target_al):
         """Generates a table showing the impact of adding/removing agents."""
         scenarios = []
-        # Test from -3 to +5 agents around the current schedule
         for agent_change in range(-3, 6):
             agent_count = base_agents + agent_change
-            if agent_count < 1: continue  # Skip impossible scenarios
+            if agent_count < 1: continue
             
             al, cap = self.predict_al(forecasted_calls, agent_count, aht_seconds)
             scenarios.append({
@@ -270,30 +258,25 @@ class CallCenterRosterOptimizer:
         if roster_df is None or analysis_data is None:
             return None
 
-        # We'll create a structure for each day and each hour
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         hourly_al_results = {}
 
         for day in days:
-            # Filter roster for just this day
             daily_roster = roster_df[roster_df['Day'] == day]
             
             for hour in self.operation_hours:
                 if hour not in analysis_data['hourly_volume']:
                     continue
                     
-                # Count agents working at this hour ON THIS DAY
                 agents_at_hour = 0
                 for _, row in daily_roster.iterrows():
                     if self.is_agent_working_at_hour(row, hour):
                         agents_at_hour += 1
                 
-                # Predict AL for this hour
                 forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
                 if forecasted_calls > 0:
                     predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
                     
-                    # Store results with day and hour as key
                     key = f"{day}_{hour}"
                     hourly_al_results[key] = {
                         'day': day,
@@ -311,13 +294,11 @@ class CallCenterRosterOptimizer:
         """Check if an agent is working at a specific hour based on their shift"""
         try:
             if row['Shift Type'] == 'Straight':
-                # Parse straight shift times
                 times = row['Start Time'].split(' to ')
                 start_hour = int(times[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= hour < end_hour
             else:
-                # Parse split shift times
                 shifts = row['Start Time'].split(' & ')
                 for shift in shifts:
                     times = shift.split(' to ')
@@ -342,16 +323,13 @@ class CallCenterRosterOptimizer:
     
     def create_template_file(self):
         """Create a template Excel file for call volume data"""
-        # Create sample data for the last 30 days
         dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
         
-        # Create hourly data template
         hourly_data = pd.DataFrame({
             'Hour': list(range(7, 22)),
             'Calls': [0] * 15
         })
         
-        # Create daily data template
         daily_data = pd.DataFrame({
             'Date': dates,
             'Total_Calls': [0] * 30,
@@ -359,7 +337,6 @@ class CallCenterRosterOptimizer:
             'Peak_Volume': [0] * 30
         })
         
-        # Create instructions sheet
         instructions = pd.DataFrame({
             'Instruction': [
                 'INSTRUCTIONS:',
@@ -381,7 +358,6 @@ class CallCenterRosterOptimizer:
             ]
         })
         
-        # Create Excel file with multiple sheets
         excel_buffer = BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
@@ -393,21 +369,14 @@ class CallCenterRosterOptimizer:
     def analyze_excel_data(self, uploaded_file):
         """Analyze uploaded Excel file for call volume"""
         try:
-            # Read the Excel file
             xls = pd.ExcelFile(uploaded_file)
             
-            # Check if hourly data is available
             if 'Hourly_Data' in xls.sheet_names:
                 df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
                 
                 if 'Hour' in df.columns and 'Calls' in df.columns:
-                    # Calculate average hourly volume
                     hourly_volume = dict(zip(df['Hour'], df['Calls']))
-                    
-                    # Find peak hours (top 4 hours with highest call volume)
                     peak_hours = df.nlargest(4, 'Calls')['Hour'].tolist()
-                    
-                    # Calculate total daily calls
                     total_daily_calls = df['Calls'].sum()
                     
                     return {
@@ -416,15 +385,12 @@ class CallCenterRosterOptimizer:
                         'total_daily_calls': total_daily_calls
                     }
             
-            # Check if daily data is available
             if 'Daily_Data' in xls.sheet_names:
                 df = pd.read_excel(uploaded_file, sheet_name='Daily_Data')
                 
                 if 'Total_Calls' in df.columns:
-                    # Calculate average daily calls
                     avg_daily_calls = df['Total_Calls'].mean()
                     
-                    # Use default hourly distribution based on typical patterns
                     hourly_volume = {
                         7: 0.02 * avg_daily_calls, 8: 0.05 * avg_daily_calls, 9: 0.08 * avg_daily_calls,
                         10: 0.10 * avg_daily_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
@@ -433,7 +399,6 @@ class CallCenterRosterOptimizer:
                         19: 0.05 * avg_daily_calls, 20: 0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
                     }
                     
-                    # Find peak hours from data if available, otherwise use defaults
                     if 'Peak_Hour' in df.columns and 'Peak_Volume' in df.columns:
                         avg_peak_hour = df['Peak_Hour'].mode()[0] if not df['Peak_Hour'].mode().empty else 11
                         peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
@@ -446,7 +411,6 @@ class CallCenterRosterOptimizer:
                         'total_daily_calls': avg_daily_calls
                     }
             
-            # If no recognized format, use default data
             st.warning("No recognized data format. Using sample data.")
             return self.get_sample_data()
             
@@ -473,8 +437,6 @@ class CallCenterRosterOptimizer:
             champions_to_use = self.champions[:total_champions]
             
             roster_data = []
-            
-            # Generate shifts for each day
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             
             for day in days:
@@ -482,16 +444,13 @@ class CallCenterRosterOptimizer:
                 roster_data.extend(day_roster)
             
             roster_df = pd.DataFrame(roster_data)
-            
-            # Apply special rules
             roster_df = self.apply_special_rules(roster_df)
             
-            # Apply manual split assignments
             if manual_splits:
                 roster_df = self.apply_manual_splits(roster_df, manual_splits)
             
-            # Assign weekly offs with limit of 3-4 per day
-            roster_df, week_offs = self.assign_weekly_offs(roster_df, max_offs_per_day=4)
+            active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
+            roster_df, week_offs = self.assign_weekly_offs(roster_df, max_offs_per_day=4, min_split_champs=active_split_champs)
             
             return roster_df, week_offs
             
@@ -500,11 +459,10 @@ class CallCenterRosterOptimizer:
             return None, None
     
     def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data, manual_splits=None):
-        """Generate roster for a single day"""
+        """Generate roster for a single day with minimum 80% AL target"""
         daily_roster = []
         
-        # Straight shifts (9 hours continuous)
-        straight_start_times = [7, 8, 9, 10]  # Start times for straight shifts
+        straight_start_times = [7, 8, 9, 10]
         
         for i, champ in enumerate(champions[:straight_shifts]):
             start_time = straight_start_times[i % len(straight_start_times)]
@@ -523,23 +481,11 @@ class CallCenterRosterOptimizer:
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
             })
         
-        # Split shifts (for remaining champions) - prioritize late coverage patterns
-        late_coverage_patterns = [p for p in self.split_shift_patterns if p['times'][-1] >= 21]  # Patterns that end at 9 PM or later
-
-        # Ensure at least 3 mid shift and 3 split shift agents for late hours
-        mid_shift_count = min(3, split_shifts // 2)
-        split_shift_count = min(3, split_shifts - mid_shift_count)
+        split_champs = champions[straight_shifts:straight_shifts + split_shifts]
         
-        for i, champ in enumerate(champions[straight_shifts:straight_shifts + split_shifts]):
-            # First assign mid shifts for late coverage
-            if i < mid_shift_count:
-                pattern = self.split_shift_patterns[1]  # 8-1 & 5-9 pattern
-            # Then assign dedicated late shifts
-            elif i < mid_shift_count + split_shift_count:
-                pattern = self.split_shift_patterns[-1]  # 3-9 pattern (dedicated late shift)
-            # Then use other patterns for remaining agents
-            else:
-                pattern = self.split_shift_patterns[i % len(self.split_shift_patterns)]
+        for i, champ in enumerate(split_champs):
+            pattern_idx = i % len(self.split_shift_patterns)
+            pattern = self.split_shift_patterns[pattern_idx]
             
             daily_roster.append({
                 'Day': day,
@@ -561,31 +507,45 @@ class CallCenterRosterOptimizer:
         if roster_df is None or analysis_data is None:
             return None
             
-        total_capacity = roster_df['Calls/Hour Capacity'].sum() * 9 * 7  # 9 hours/day, 7 days
-        required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1  # 110% of weekly calls
+        total_capacity = 0
+        for _, row in roster_df.iterrows():
+            if row['Shift Type'] == 'Straight':
+                hours_worked = 9
+            else:
+                shifts = row['Start Time'].split(' & ')
+                hours_worked = 0
+                for shift in shifts:
+                    times = shift.split(' to ')
+                    start_hour = int(times[0].split(':')[0])
+                    end_hour = int(times[1].split(':')[0])
+                    hours_worked += (end_hour - start_hour)
+            
+            total_capacity += row['Calls/Hour Capacity'] * hours_worked
+        
+        required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1
+        
+        utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
+        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
         
         return {
             'total_capacity': total_capacity,
             'required_capacity': required_capacity,
-            'utilization_rate': min(100, (required_capacity / total_capacity) * 100),
-            'expected_answer_rate': min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100)
+            'utilization_rate': utilization_rate,
+            'expected_answer_rate': expected_answer_rate
         }
     
     def calculate_answer_rate(self, roster_df, analysis_data):
-        """Calculate expected Answer Rate percentage"""
+        """Calculate expected Answer Rate percentage - FIXED VERSION"""
         if roster_df is None or analysis_data is None:
             return None
             
-        # Calculate total weekly capacity
         total_weekly_capacity = 0
         for day in roster_df['Day'].unique():
             day_roster = roster_df[roster_df['Day'] == day]
             for _, row in day_roster.iterrows():
-                # Calculate hours worked based on shift type
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
-                else:  # Split shift
-                    # Parse the split shift hours
+                else:
                     shifts = row['Start Time'].split(' & ')
                     hours_worked = 0
                     for shift in shifts:
@@ -596,16 +556,17 @@ class CallCenterRosterOptimizer:
                 
                 total_weekly_capacity += row['Calls/Hour Capacity'] * hours_worked
         
-        # Calculate expected weekly call volume
         total_weekly_calls = analysis_data['total_daily_calls'] * 7
         
-        # Calculate answer rate (capped at 100%)
-        answer_rate = min(100, (total_weekly_capacity / total_weekly_calls) * 100)
-        
+        if total_weekly_calls > 0:
+            answer_rate = min(100, (total_weekly_capacity / total_weekly_calls) * 100)
+        else:
+            answer_rate = 0
+            
         return answer_rate
     
     def calculate_daily_answer_rates(self, roster_df, analysis_data):
-        """Calculate Answer Rate for each day"""
+        """Calculate Answer Rate for each day - FIXED VERSION"""
         if roster_df is None or analysis_data is None:
             return None
             
@@ -618,14 +579,11 @@ class CallCenterRosterOptimizer:
                 daily_rates[day] = 0
                 continue
                 
-            # Calculate daily capacity
             daily_capacity = 0
             for _, row in day_roster.iterrows():
-                # Calculate hours worked based on shift type
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
-                else:  # Split shift
-                    # Parse the split shift hours
+                else:
                     shifts = row['Start Time'].split(' & ')
                     hours_worked = 0
                     for shift in shifts:
@@ -636,8 +594,10 @@ class CallCenterRosterOptimizer:
                 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
             
-            # Calculate daily answer rate
-            daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+            if analysis_data['total_daily_calls'] > 0:
+                daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+            else:
+                daily_rates[day] = 0
         
         return daily_rates
     
@@ -645,7 +605,6 @@ class CallCenterRosterOptimizer:
         """Display an editable roster table with week offs"""
         st.subheader("✏️ Edit Roster Manually")
         
-        # Create a copy for editing
         edited_df = st.data_editor(
             roster_df,
             column_config={
@@ -672,7 +631,6 @@ class CallCenterRosterOptimizer:
             use_container_width=True
         )
         
-        # Show week offs for manual editing
         st.subheader("📅 Edit Weekly Offs")
         week_off_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
@@ -703,7 +661,6 @@ class CallCenterRosterOptimizer:
             use_container_width=True
         )
         
-        # Convert back to dictionary format
         new_week_offs = {}
         for _, row in edited_week_offs.iterrows():
             if row["Current Day Off"] != "No day off":
@@ -711,42 +668,49 @@ class CallCenterRosterOptimizer:
         
         return edited_df, new_week_offs
     
-    def assign_weekly_offs(self, roster_df, max_offs_per_day=4):
-        """Assign weekly off days to champions with limit per day"""
+    def assign_weekly_offs(self, roster_df, max_offs_per_day=4, min_split_champs=4):
+        """Assign weekly off days to champions with limit per day, ensuring split shift coverage"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         champions = roster_df['Champion'].unique()
         
-        # Create a copy of the roster
         updated_roster = roster_df.copy()
         week_offs = {}
-        
-        # Track offs per day
         offs_per_day = {day: 0 for day in days}
         
-        # For each champion, assign one day off
+        split_champs = []
+        for champ in champions:
+            champ_shifts = updated_roster[updated_roster['Champion'] == champ]
+            if any('Split' in shift_type for shift_type in champ_shifts['Shift Type']):
+                split_champs.append(champ)
+        
         for champion in champions:
-            # Get all days the champion is working
             champ_days = updated_roster[updated_roster['Champion'] == champion]['Day'].unique()
             
-            # If champion is working all 7 days, remove one day
             if len(champ_days) == 7:
-                # Find days that haven't reached the max off limit
-                available_off_days = [day for day in days if offs_per_day[day] < max_offs_per_day]
+                available_off_days = []
+                for day in days:
+                    if offs_per_day[day] < max_offs_per_day:
+                        if champion in split_champs:
+                            split_champs_working = 0
+                            for split_champ in split_champs:
+                                if split_champ != champion and day in updated_roster[updated_roster['Champion'] == split_champ]['Day'].values:
+                                    split_champs_working += 1
+                            if split_champs_working >= min_split_champs:
+                                available_off_days.append(day)
+                        else:
+                            available_off_days.append(day)
                 
                 if available_off_days:
                     day_off = random.choice(available_off_days)
                     week_offs[champion] = day_off
                     offs_per_day[day_off] += 1
                     
-                    # Remove the champion from the selected day
                     updated_roster = updated_roster[
                         ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
                     ]
                 else:
-                    # If all days have max offs, don't assign an off day
                     week_offs[champion] = "No day off (max reached)"
             else:
-                # Find which day is missing
                 working_days = set(champ_days)
                 all_days = set(days)
                 day_off = list(all_days - working_days)[0] if all_days - working_days else "No day off"
@@ -758,13 +722,11 @@ class CallCenterRosterOptimizer:
     
     def apply_special_rules(self, roster_df):
         """Apply special rules like Revathi always on split shift"""
-        # Ensure Revathi is always on split shift
         revathi_mask = roster_df['Champion'] == 'Revathi'
         roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
         
-        # Update split shift times for Revathi
         for idx in roster_df[revathi_mask].index:
-            pattern = self.split_shift_patterns[1]  # Use the 8-1 & 5-9 pattern for Revathi
+            pattern = self.split_shift_patterns[0]
             roster_df.at[idx, 'Start Time'] = pattern['display']
             roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
             roster_df.at[idx, 'Duration'] = '9 hours (with break)'
@@ -778,7 +740,6 @@ class CallCenterRosterOptimizer:
             day = assignment['day']
             pattern = assignment['pattern']
             
-            # Find the row to update
             mask = (roster_df['Champion'] == champ) & (roster_df['Day'] == day)
             if mask.any():
                 roster_df.loc[mask, 'Shift Type'] = 'Split'
@@ -791,10 +752,8 @@ class CallCenterRosterOptimizer:
     def filter_split_shift_champs(self, roster_df, can_split_only=True):
         """Filter champions who can work split shifts"""
         if can_split_only:
-            # Get list of champions who can work split shifts
             split_champs = [champ["name"] for champ in self.champions if champ["can_split"]]
             
-            # Filter roster to only include these champions for split shifts
             filtered_roster = roster_df.copy()
             split_mask = filtered_roster['Shift Type'] == 'Split'
             filtered_roster = filtered_roster[~split_mask | filtered_roster['Champion'].isin(split_champs)]
@@ -807,33 +766,26 @@ class CallCenterRosterOptimizer:
         """Format the roster in the sample Excel format"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
-        # Create a DataFrame in the sample format
         display_df = pd.DataFrame()
         display_df['Name'] = [champ['name'] for champ in self.champions if champ['name'] in roster_df['Champion'].unique()]
         
-        # Add default shift pattern column
         display_df['Shift'] = ""
         
-        # Add columns for each day
         for day in days:
             display_df[day] = ""
         
-        # Fill in the shifts for each day
         for _, row in roster_df.iterrows():
             champ_name = row['Champion']
             day = row['Day']
             shift_time = row['Start Time']
             
-            # Find the row for this champion
             champ_idx = display_df[display_df['Name'] == champ_name].index
             if len(champ_idx) > 0:
                 display_df.at[champ_idx[0], day] = shift_time
                 
-                # Set the default shift pattern (most common shift)
                 if display_df.at[champ_idx[0], 'Shift'] == "":
                     display_df.at[champ_idx[0], 'Shift'] = shift_time
         
-        # Apply week offs
         for champ, off_day in week_offs.items():
             if off_day in days:
                 champ_idx = display_df[display_df['Name'] == champ].index
@@ -853,11 +805,10 @@ class CallCenterRosterOptimizer:
         for day in days:
             day_roster = roster_df[roster_df['Day'] == day]
             for _, row in day_roster.iterrows():
-                # Check if agent works during late hours (5 PM - 9 PM)
                 if self.is_agent_working_at_late_hours(row):
-                    if "&" in row['Start Time']:  # Split shift
+                    if "&" in row['Start Time']:
                         late_hour_coverage[day]["split_shift"] += 1
-                    else:  # Straight shift that covers late hours
+                    else:
                         late_hour_coverage[day]["mid_shift"] += 1
                     late_hour_coverage[day]["total"] += 1
         
@@ -867,25 +818,73 @@ class CallCenterRosterOptimizer:
         """Check if an agent is working during late hours (5 PM - 9 PM)"""
         try:
             if row['Shift Type'] == 'Straight':
-                # Parse straight shift times
                 times = row['Start Time'].split(' to ')
                 start_hour = int(times[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
-                # Check if shift covers any part of 5 PM - 9 PM
                 return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
             else:
-                # Parse split shift times
                 shifts = row['Start Time'].split(' & ')
                 for shift in shifts:
                     times = shift.split(' to ')
                     start_hour = int(times[0].split(':')[0])
                     end_hour = int(times[1].split(':')[0])
-                    # Check if this part of shift covers any part of 5 PM - 9 PM
                     if start_hour <= 17 < end_hour or start_hour < 21 <= end_hour:
                         return True
                 return False
         except:
             return False
+
+    def validate_split_shift_coverage(self, roster_df):
+        """Validate that we have enough split shift champions each day"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        validation_results = {}
+        
+        active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            split_champs_count = len(day_roster[day_roster['Shift Type'] == 'Split'])
+            validation_results[day] = {
+                'split_champs': split_champs_count,
+                'status': '✅ Sufficient' if split_champs_count >= active_split_champs else '❌ Insufficient'
+            }
+        
+        return validation_results
+
+    def validate_al_target(self, roster_df, analysis_data):
+        """Validate that we achieve at least 80% AL target"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        validation_results = {}
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            
+            daily_capacity = 0
+            for _, row in day_roster.iterrows():
+                if row['Shift Type'] == 'Straight':
+                    hours_worked = 9
+                else:
+                    shifts = row['Start Time'].split(' & ')
+                    hours_worked = 0
+                    for shift in shifts:
+                        times = shift.split(' to ')
+                        start_hour = int(times[0].split(':')[0])
+                        end_hour = int(times[1].split(':')[0])
+                        hours_worked += (end_hour - start_hour)
+                
+                daily_capacity += row['Calls/Hour Capacity'] * hours_worked
+            
+            if analysis_data['total_daily_calls'] > 0:
+                expected_al = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+            else:
+                expected_al = 0
+                
+            validation_results[day] = {
+                'expected_al': expected_al,
+                'status': '✅ Target Met' if expected_al >= 80 else '❌ Below Target'
+            }
+        
+        return validation_results
 
 # Main application
 def main():
@@ -893,7 +892,6 @@ def main():
     
     optimizer = CallCenterRosterOptimizer()
     
-    # Initialize session state
     if 'manual_splits' not in st.session_state:
         st.session_state.manual_splits = []
     
@@ -902,7 +900,6 @@ def main():
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("⚙️ Shift Configuration")
         
-        # Shift type selection
         st.subheader("Shift Type Allocation")
         total_champs = len(optimizer.champions)
         straight_shifts = st.slider(
@@ -917,7 +914,7 @@ def main():
             "Split Shifts (with break)", 
             min_value=0, 
             max_value=total_champs, 
-            value=10,
+            value=5,
             help="Number of champions working split shifts with afternoon break"
         )
         
@@ -927,7 +924,19 @@ def main():
         
         st.metric("Total Champions Used", f"{straight_shifts + split_shifts}/{total_champs}")
         
-        # Split shift filter
+        # NEW: Split shift active champions selection
+        st.subheader("Active Split Shift Champions")
+        min_split_champs = max(4, split_shifts)
+        active_split_champs = st.slider(
+            "Minimum Active Split Shift Champions per Day",
+            min_value=4,
+            max_value=split_shifts,
+            value=min(5, split_shifts),
+            help="Set the minimum number of split shift champions that must be active each day"
+        )
+        
+        st.session_state.active_split_champs = active_split_champs
+        
         st.subheader("Split Shift Filter")
         split_filter = st.checkbox(
             "Only assign split shifts to champions who can split",
@@ -937,7 +946,6 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Template download section
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("📊 Data Template")
         
@@ -945,7 +953,6 @@ def main():
         st.subheader("Download Data Template")
         st.write("Download this template, add your call volume data, and upload it back.")
         
-        # Create template file
         template_data = optimizer.create_template_file()
         
         st.download_button(
@@ -957,7 +964,6 @@ def main():
         )
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # File upload section
         st.subheader("Upload Your Data")
         uploaded_file = st.file_uploader(
             "Upload Your Call Volume Data", 
@@ -966,22 +972,18 @@ def main():
         )
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Manual split shift assignment
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🔧 Manual Split Shift Assignment")
         
         st.markdown('<div class="split-shift-option">', unsafe_allow_html=True)
         st.subheader("Assign Specific Split Shifts")
         
-        # Champion selection
         available_champs = [champ["name"] for champ in optimizer.champions]
         selected_champ = st.selectbox("Select Champion", available_champs)
         
-        # Day selection
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         selected_day = st.selectbox("Select Day", days)
         
-        # Split shift pattern selection
         pattern_options = [f"{pattern['name']} ({pattern['display']})" 
                           for pattern in optimizer.split_shift_patterns]
         selected_pattern_idx = st.selectbox("Select Split Shift Pattern", range(len(pattern_options)), format_func=lambda x: pattern_options[x])
@@ -993,14 +995,12 @@ def main():
                 'pattern': optimizer.split_shift_patterns[selected_pattern_idx]
             }
             
-            # Check if this assignment already exists
             if not any(a['champion'] == selected_champ and a['day'] == selected_day for a in st.session_state.manual_splits):
                 st.session_state.manual_splits.append(new_assignment)
                 st.success(f"Added split shift for {selected_champ} on {selected_day}")
             else:
                 st.warning(f"{selected_champ} already has a manual split assignment on {selected_day}")
         
-        # Show current manual assignments
         if st.session_state.manual_splits:
             st.subheader("Current Manual Assignments")
             for i, assignment in enumerate(st.session_state.manual_splits):
@@ -1012,7 +1012,6 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Operation hours info
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🕐 Operation Hours")
         st.info("""
@@ -1050,7 +1049,6 @@ def main():
                 st.metric("Weekly Call Volume", f"{analysis_data['total_daily_calls'] * 7:,.0f}")
                 st.metric("Peak Hours", ", ".join([f"{h}:00" for h in analysis_data['peak_hours']]))
         else:
-            # Use default data based on average
             st.session_state.analysis_data = {
                 'hourly_volume': {
                     7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
@@ -1058,7 +1056,7 @@ def main():
                     18: 224.9, 19: 179.3, 20: 113.9, 21: 0
                 },
                 'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': 17500 / 7  # Based on your average
+                'total_daily_calls': 17500 / 7
             }
             st.metric("Estimated Daily Calls", f"{17500 / 7:,.0f}")
             st.metric("Estimated Weekly Calls", "17,500")
@@ -1075,7 +1073,6 @@ def main():
                     st.session_state.manual_splits
                 )
                 
-                # Apply split shift filter if enabled
                 if split_filter:
                     roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
                 
@@ -1083,15 +1080,11 @@ def main():
                     st.session_state.roster_df = roster_df
                     st.session_state.week_offs = week_offs
                     
-                    # Calculate performance metrics
                     metrics = optimizer.calculate_coverage(roster_df, st.session_state.analysis_data)
                     answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
                     daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
                     
-                    # Calculate AL predictions
                     hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, st.session_state.analysis_data)
-                    
-                    # Calculate late hour coverage
                     late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
                     
                     st.session_state.metrics = metrics
@@ -1100,13 +1093,11 @@ def main():
                     st.session_state.hourly_al_results = hourly_al_results
                     st.session_state.late_hour_coverage = late_hour_coverage
                     
-                    # Format roster for display
                     st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
                     
                     st.success("✅ Roster generated successfully!")
         
         elif 'roster_df' in st.session_state:
-            # Show previously generated roster
             st.info("📋 Previously generated roster is available. Click the button to generate a new one.")
     
     # Display results if available
@@ -1114,7 +1105,6 @@ def main():
         st.markdown("---")
         st.markdown('<div class="section-header"><h2>📊 Performance Metrics</h2></div>', unsafe_allow_html=True)
         
-        # Display metrics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0f} calls")
@@ -1125,158 +1115,53 @@ def main():
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
         
-        # Display late hour coverage
-        st.markdown('<div class="section-header"><h2>👥 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
+        # Display split shift coverage validation
+        st.markdown('<div class="section-header"><h2>✅ Split Shift Coverage Validation</h2></div>', unsafe_allow_html=True)
         
-        if 'late_hour_coverage' in st.session_state:
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            coverage_data = []
-            
-            for day in days:
-                coverage = st.session_state.late_hour_coverage.get(day, {"mid_shift": 0, "split_shift": 0, "total": 0})
-                coverage_data.append({
-                    "Day": day,
-                    "Mid Shift Agents": coverage["mid_shift"],
-                    "Split Shift Agents": coverage["split_shift"],
-                    "Total Agents": coverage["total"],
-                    "Status": "✅ Sufficient" if coverage["mid_shift"] >= 3 and coverage["split_shift"] >= 3 else "⚠️ Needs Attention"
-                })
-            
-            coverage_df = pd.DataFrame(coverage_data)
-            st.dataframe(coverage_df, use_container_width=True, hide_index=True)
-            
-            # Check if any day has insufficient coverage
-            insufficient_days = [day for day in coverage_data if day["Status"] == "⚠️ Needs Attention"]
-            if insufficient_days:
-                st.warning(f"⚠️ {len(insufficient_days)} days have insufficient late hour coverage!")
-                st.info("""
-                **Recommendations to improve late hour coverage:**
-                1. Increase the number of split shifts
-                2. Assign more agents to patterns that cover late hours (5 PM - 9 PM)
-                3. Use the manual assignment feature to ensure key agents work during late hours
-                4. Consider adding dedicated late shifts (2-9 PM or 3-9 PM)
-                """)
+        validation_results = optimizer.validate_split_shift_coverage(st.session_state.roster_df)
         
-        # Display AL prediction metrics
-        st.markdown('<div class="section-header"><h2>🎯 AL Prediction Analysis</h2></div>', unsafe_allow_html=True)
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        cols = st.columns(7)
         
-        if 'hourly_al_results' in st.session_state and st.session_state.hourly_al_results:
-            # Create a summary of AL predictions
-            al_values = []
-            for key, hour_data in st.session_state.hourly_al_results.items():
-                if 'predicted_al' in hour_data:
-                    al_values.append(hour_data['predicted_al'])
-            
-            avg_al = sum(al_values) / len(al_values) if al_values else 0
-            
-            # Count hours by status
-            status_counts = {
-                "✅ GOOD": 0,
-                "🟡 WARNING": 0,
-                "🟠 AT RISK": 0,
-                "🔴 CRITICAL": 0
-            }
-            
-            for key, hour_data in st.session_state.hourly_al_results.items():
-                if 'status' in hour_data:
-                    status = hour_data['status']
-                    if status in status_counts:
-                        status_counts[status] += 1
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Average Predicted AL", f"{avg_al:.1f}%")
-            with col2:
-                st.metric("Hours at Target", f"{status_counts['✅ GOOD']}")
-            with col3:
-                st.metric("Hours Needing Attention", f"{status_counts['🟡 WARNING'] + status_counts['🟠 AT RISK']}")
-            with col4:
-                st.metric("Critical Hours", f"{status_counts['🔴 CRITICAL']}")
-            
-            # Show detailed hourly AL predictions by day
-            st.subheader("Hourly AL Predictions by Day")
-            
-            # Let user select a day to view
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            selected_day = st.selectbox("Select day to view hourly AL predictions", days)
-            
-            # Filter results for the selected day
-            al_data = []
-            for key, data in st.session_state.hourly_al_results.items():
-                if 'day' in data and data['day'] == selected_day:
-                    al_data.append({
-                        'Hour': f"{data['hour']:02d}:00",
-                        'Agents': data['agents'],
-                        'Forecasted Calls': int(data['forecast']),
-                        'Capacity': int(data['capacity']),
-                        'Predicted AL': f"{data['predicted_al']}%",
-                        'Status': data['status']
-                    })
-            
-            # Sort by hour
-            al_data.sort(key=lambda x: x['Hour'])
-            
-            if al_data:
-                al_df = pd.DataFrame(al_data)
-                st.dataframe(al_df, use_container_width=True, hide_index=True)
-                
-                # Identify critical hours that need extra champions
-                critical_hours = []
-                for data in al_data:
-                    if float(data['Predicted AL'].replace('%', '')) < optimizer.TARGET_AL:
-                        # FIXED: Use a safer approach to get forecast
-                        forecast_value = 0
-                        for item in al_data:
-                            if 'Hour' in item and 'Forecasted Calls' in item and str(item['Hour']) == str(data['Hour']):
-                                forecast_value = item['Forecasted Calls']
-                                break
-                        
-                        agents_needed = optimizer.agents_needed_for_target(
-                            forecast_value, optimizer.TARGET_AL, optimizer.AVERAGE_HANDLING_TIME_SECONDS
-                        )
-                        extra_agents = max(0, agents_needed - data['Agents'])
-                        if extra_agents > 0:
-                            critical_hours.append({
-                                'Hour': data['Hour'],
-                                'Current Agents': data['Agents'],
-                                'Agents Needed': int(agents_needed),
-                                'Extra Agents Needed': int(extra_agents),
-                                'Current AL': data['Predicted AL']
-                            })
-                
-                if critical_hours:
-                    st.subheader("⚠️ Hours Needing Extra Champions")
-                    critical_df = pd.DataFrame(critical_hours)
-                    st.dataframe(critical_df, use_container_width=True, hide_index=True)
-                    
-                    # ADD RECOMMENDATIONS FOR LATE HOUR COVERAGE
-                    st.subheader("🎯 Recommendations for Late Hour Coverage")
-                    
-                    # Analyze late hours specifically (17:00-20:00)
-                    late_hour_critical = []
-                    for data in al_data:
-                        hour_num = int(data['Hour'].split(':')[0])
-                        if 17 <= hour_num <= 20 and float(data['Predicted AL'].replace('%', '')) < optimizer.TARGET_AL:
-                            late_hour_critical.append(data)
-                    
-                    if late_hour_critical:
-                        st.warning("**Critical late-hour coverage issues detected (5 PM - 9 PM):**")
-                        for hour_data in late_hour_critical:
-                            st.write(f"- {hour_data['Hour']}: {hour_data['Predicted AL']} AL ({hour_data['Agents']} agents)")
-                        
-                        st.info("""
-                        **Recommended Actions:**
-                        1. Assign more split shifts with late coverage (5 PM - 9 PM)
-                        2. Consider adding a dedicated late shift (1 PM - 9 PM)
-                        3. Limit week-offs during late hours
-                        4. Use the new '12-5 & 6-9' split shift pattern for better coverage
-                        """)
-            else:
-                st.info("No AL prediction data available for the selected day.")
+        for i, day in enumerate(days):
+            with cols[i]:
+                result = validation_results[day]
+                st.metric(
+                    day[:3], 
+                    f"{result['split_champs']} split champs", 
+                    result['status'],
+                    delta_color="normal" if result['status'] == '✅ Sufficient' else "inverse"
+                )
+        
+        insufficient_days = [day for day, result in validation_results.items() if result['status'] == '❌ Insufficient']
+        if insufficient_days:
+            st.error(f"⚠️ {len(insufficient_days)} days have insufficient split shift coverage!")
+            st.info(f"**Recommendation:** Increase the 'Minimum Active Split Shift Champions' value or add more split shifts.")
+        
+        # Display AL target validation
+        st.markdown('<div class="section-header"><h2>🎯 AL Target Validation (Minimum 80%)</h2></div>', unsafe_allow_html=True)
+        
+        al_validation = optimizer.validate_al_target(st.session_state.roster_df, st.session_state.analysis_data)
+        
+        cols = st.columns(7)
+        
+        for i, day in enumerate(days):
+            with cols[i]:
+                result = al_validation[day]
+                st.metric(
+                    day[:3], 
+                    f"{result['expected_al']:.1f}%", 
+                    result['status'],
+                    delta_color="normal" if result['status'] == '✅ Target Met' else "inverse"
+                )
+        
+        below_target_days = [day for day, result in al_validation.items() if result['status'] == '❌ Below Target']
+        if below_target_days:
+            st.error(f"⚠️ {len(below_target_days)} days are below the 80% AL target!")
+            st.info("**Recommendation:** Increase the number of agents or adjust shift patterns.")
         
         # Display daily answer rates
         st.markdown('<div class="section-header"><h2>📈 Daily Answer Rates</h2></div>', unsafe_allow_html=True)
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         day_cols = st.columns(7)
         
         for i, day in enumerate(days):
@@ -1292,7 +1177,6 @@ def main():
             week_off_df.index.name = 'Champion'
             week_off_df = week_off_df.reset_index()
             
-            # Count week offs per day
             offs_per_day = week_off_df['Day Off'].value_counts()
             st.write("Week Offs per Day:")
             for day in days:
@@ -1322,11 +1206,9 @@ def main():
                 st.session_state.roster_df, st.session_state.week_offs
             )
             
-            # Update session state with edited values
             st.session_state.roster_df = edited_roster
             st.session_state.week_offs = edited_week_offs
             
-            # Recalculate metrics after editing
             if st.button("Update Metrics after Editing"):
                 updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
                 updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
@@ -1350,7 +1232,6 @@ def main():
         # Download options
         st.markdown('<div class="section-header"><h2>💾 Download Options</h2></div>', unsafe_allow_html=True)
         
-        # Download in sample format
         csv = st.session_state.formatted_roster.to_csv(index=False)
         
         col1, col2 = st.columns(2)
@@ -1363,7 +1244,6 @@ def main():
                 use_container_width=True
             )
         with col2:
-            # Excel download
             excel_buffer = BytesIO()
             with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                 st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
