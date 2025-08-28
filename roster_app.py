@@ -144,7 +144,6 @@ class CallCenterRosterOptimizer:
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
             {"name": "9-2 & 5-9", "times": (9, 14, 17, 21), "display": "09:00 to 14:00 & 17:00 to 21:00"},
             {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
-            {"name": "12-5 & 6-9", "times": (12, 17, 18, 21), "display": "12:00 to 17:00 & 18:00 to 21:00"},
         ]
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
         self.TARGET_AL = 80  # Target Answer Level
