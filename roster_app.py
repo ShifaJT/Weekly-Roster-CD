@@ -1,178 +1,80 @@
 # roster_app.py
 """
-Complete Streamlit Roster Planner
-- Upload Champions Excel (first sheet must include 'name'; optional columns: primary_lang, secondary_langs, calls_per_hour, can_split)
-- Upload Calls Excel with sheet 'Hourly_Data' (Day, Hour, Calls) OR 'Daily_Data' (Day, Calls)
-- Active time: 7h50m (28200s). Shift duration: 9 hours.
-- Uses 30-minute slots (48 slots/day) for split-shift precision.
-- Editable roster grid (Champion rows x Mon..Sun columns). Manual edits applied and AL recalculated.
-- Leave management: download blank template, download current leave status, upload leave updates to apply.
-- Downloads: sample roster Excel, long CSV, planner Excel.
+Date-hourly Roster Planner (single file)
+- Upload Champions Excel (first sheet; must have 'name' column)
+- Upload Calls Excel with sheet 'Hourly_Data' having columns: Date, Hour (0-23), Calls
+- Leave management via roster editor (enter 'WO' or leave type into cell)
+- Straight + Split shifts supported (all 9h)
+- Active time = 7h50m used for capacity calculations
+- Download roster, CSV, planner Excel
 """
 import io
 import math
+import calendar
 from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
-# --------------------- CONFIG ---------------------
-DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-# Use 30-minute slots for precision: 48 slots per day (slot 0 = 00:00-00:29, slot 14 = 07:00-07:29, etc.)
-SLOTS_PER_HOUR = 2
-SLOTS_PER_DAY = 24 * SLOTS_PER_HOUR
-
-# AHT default and active time
-DEFAULT_AHT_SECONDS = 202  # can be changed in UI
-ACTIVE_TIME_SECONDS = 7 * 3600 + 50 * 60  # 7h50m = 28200 sec
+# ---------------- CONFIG ----------------
 SHIFT_DURATION_HOURS = 9
-SHIFT_DURATION_SLOTS = SHIFT_DURATION_HOURS * SLOTS_PER_HOUR  # 18 slots
+ACTIVE_TIME_SECONDS = 7 * 3600 + 50 * 60  # 7h50m = 28200 sec
+SLOTS_PER_HOUR = 1  # we will use hourly slots for simplicity (0..23)
+SLOTS_PER_DAY = 24
 
-# Default hourly distribution (for converting daily to hourly). 24 values (per hour)
-DEFAULT_HOURLY_PROFILE = np.array([
-    0.01, 0.01, 0.01, 0.01, 0.01,
-    0.02, 0.03, 0.04, 0.05, 0.06,
-    0.07, 0.07, 0.06, 0.05, 0.05,
-    0.06, 0.07, 0.08, 0.09, 0.09,
-    0.07, 0.05, 0.04, 0.03, 0.02
-])
-DEFAULT_HOURLY_PROFILE = DEFAULT_HOURLY_PROFILE / DEFAULT_HOURLY_PROFILE.sum()
-
-# Shift options requested (straight and split). We'll represent times as decimals: 16.5 = 16:30
-STRAIGHT_OPTIONS = [
-    (7.0, 16.0), (8.0, 17.0), (9.0, 18.0), (10.0, 19.0), (11.0, 20.0), (12.0, 21.0)
+# Straight shift start/end (start_hour, end_hour)
+STRAIGHT_SHIFTS = [
+    (7, 16), (8, 17), (9, 18), (10, 19), (11, 20), (12, 21)
 ]
+
+# Split shift options (block1_start, block1_end, block2_start, block2_end)
+# All blocks sum to approximate shift working windows; we will allow half-hour by using .5 (interpreted as :30)
 SPLIT_OPTIONS = [
-    ((7.0, 11.0), (16.5, 21.0)),  # 07:00-11:00 & 16:30-21:00
-    ((8.0, 12.0), (16.5, 21.0)),
-    ((9.0, 13.0), (16.5, 21.0)),
-    ((10.0, 14.0), (16.5, 21.0)),
-    # also include some longer single block splits if requested earlier
-    ((7.0, 12.5), (16.5, 21.0)),  # 07:00-12:30 & 16:30-21:00
-    ((10.0, 15.0), (16.5, 21.0)),  # example (10-15 & 16.5-21) but will clip if overlap
+    (7.0, 11.0, 16.5, 21.0),  # 07:00-11:00 & 16:30-21:00
+    (8.0, 12.0, 16.5, 21.0),
+    (9.0, 13.0, 16.5, 21.0),
+    (10.0, 14.0, 16.5, 21.0),
+    (7.0, 12.5, 16.5, 21.0),  # 07:00-12:30 & 16:30-21:00
 ]
 
-LEAVE_TYPES = ["Special Leave", "Casual Leave", "Planned Leave", "Sick Leave", "Comp Off"]
+LEAVE_MARKERS = {"WO", "WO+", "WO-"}  # user can input any leave text; we'll treat non-empty/non-shift as leave
 
-# --------------------- UTILITIES ---------------------
-def time_to_slot(t: float) -> int:
-    """
-    Convert decimal hours t (e.g., 7.5 for 07:30) to slot index (0..47).
-    """
-    # handle t like 16.5 -> 16.5*2 = 33
-    return int(round(t * SLOTS_PER_HOUR))
+# ---------------- HELPERS ----------------
+def parse_time_decimal(t: float) -> Tuple[int, int]:
+    """Convert decimal hour (e.g., 16.5) to (hour, minute)"""
+    hour = int(math.floor(t))
+    minute = 30 if abs(t - hour - 0.5) < 0.01 else 0
+    return hour, minute
 
-def slot_to_time_str(slot: int) -> str:
-    """Return string HH:MM for slot start"""
-    hour = slot // SLOTS_PER_HOUR
-    minute = (slot % SLOTS_PER_HOUR) * (60 // SLOTS_PER_HOUR)
-    return f"{hour:02d}:{minute:02d}"
+def slot_index_from_time_decimal(t: float) -> int:
+    """Map decimal t to slot index (hour). Half hours -> map to floor hour (simple)."""
+    h, m = parse_time_decimal(t)
+    return h  # use hour indexing 0..23; half-hours will map to same hour for coverage approximation
 
-def slots_span_from_range(start_dec: float, end_dec: float) -> Tuple[int, int]:
-    """Given decimal hours start and end, return integer slot indices [s, e)"""
-    s = time_to_slot(start_dec)
-    e = time_to_slot(end_dec)
-    if e <= s:
-        # clip to same day end
-        e = min(s + SHIFT_DURATION_SLOTS, SLOTS_PER_DAY)
-    return s, e
+def format_time_from_decimal(t: float) -> str:
+    h, m = parse_time_decimal(t)
+    return f"{h:02d}:{m:02d}"
 
 def per_agent_capacity_per_hour(aht_seconds: int) -> float:
-    """Number of calls an agent handles in one full productive hour (if fully active)"""
+    """Calls handled per full productive hour if agent is fully active that hour."""
     return 3600.0 / max(1, aht_seconds)
 
-def effective_capacity_per_slot(aht_seconds: int) -> float:
-    """Effective capacity per 30-minute slot considering active fraction across the shift."""
-    cap_per_hour = per_agent_capacity_per_hour(aht_seconds)
-    # active fraction relative to SHIFT_DURATION_HOURS
+def effective_capacity_per_hour(aht_seconds: int) -> float:
+    """Effective per-hour capacity considering active fraction across shift (active / shift_length)."""
+    cap_full = per_agent_capacity_per_hour(aht_seconds)
     active_fraction = ACTIVE_TIME_SECONDS / (SHIFT_DURATION_HOURS * 3600.0)
-    # per-hour effective capacity
-    eff_per_hour = cap_per_hour * active_fraction
-    # per slot (30 min) capacity
-    return eff_per_hour / SLOTS_PER_HOUR
+    return cap_full * active_fraction
 
-def ensure_calls_hourly(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Accept Hourly_Data (Day, Hour, Calls) or Daily_Data (Day, Calls).
-    Return DataFrame with columns Day, Hour (0-23), Calls.
-    """
-    df = df.copy()
-    if set(["Day", "Hour", "Calls"]).issubset(df.columns):
-        # normalize day names
-        df["Day"] = df["Day"].astype(str).str.strip().str.capitalize()
-        short = {"Mon":"Monday","Tue":"Tuesday","Wed":"Wednesday","Thu":"Thursday","Fri":"Friday","Sat":"Saturday","Sun":"Sunday"}
-        df["Day"] = df["Day"].replace(short)
-        df = df[df["Day"].isin(DAYS)].copy()
-        df["Hour"] = df["Hour"].astype(int)
-        df["Calls"] = pd.to_numeric(df["Calls"], errors="coerce").fillna(0.0)
-        # ensure all hours present for each day
-        rows=[]
-        for d in DAYS:
-            tmp = df[df["Day"]==d].set_index("Hour") if not df[df["Day"]==d].empty else pd.DataFrame()
-            for h in range(24):
-                val = float(tmp.loc[h,"Calls"]) if (not tmp.empty and h in tmp.index) else 0.0
-                rows.append({"Day":d,"Hour":h,"Calls":val})
-        return pd.DataFrame(rows)
-    elif set(["Day","Calls"]).issubset(df.columns):
-        # Daily totals — expand using DEFAULT_HOURLY_PROFILE
-        rows=[]
-        df = df.copy()
-        df["Day"] = df["Day"].astype(str).str.strip().str.capitalize()
-        df = df[df["Day"].isin(DAYS)].copy()
-        for _,r in df.iterrows():
-            total = float(r["Calls"]) if pd.notnull(r["Calls"]) else 0.0
-            day = r["Day"]
-            for h in range(24):
-                rows.append({"Day":day,"Hour":h,"Calls": round(total * DEFAULT_HOURLY_PROFILE[h],2)})
-        return pd.DataFrame(rows)
-    else:
-        raise ValueError("Calls sheet must have either (Day,Hour,Calls) OR (Day,Calls).")
-
-def hourly_to_slot_calls(hourly_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert hourly calls (Day, Hour 0..23, Calls) into slot calls (Day, Slot 0..47, Calls_per_slot).
-    We split each hour's calls equally into two slots (simple approach).
-    """
-    rows=[]
-    for _,r in hourly_df.iterrows():
-        day = r["Day"]
-        h = int(r["Hour"])
-        calls = float(r["Calls"])
-        # split equally into two slots
-        s1 = h * SLOTS_PER_HOUR
-        rows.append({"Day":day,"Slot":s1,"Calls":calls/2.0})
-        rows.append({"Day":day,"Slot":s1+1,"Calls":calls/2.0})
-    df = pd.DataFrame(rows)
-    # ensure all slots present
-    full=[]
-    for d in DAYS:
-        df_d = df[df["Day"]==d].set_index("Slot") if not df[df["Day"]==d].empty else pd.DataFrame()
-        for s in range(SLOTS_PER_DAY):
-            val = float(df_d.loc[s,"Calls"]) if (not df_d.empty and s in df_d.index) else 0.0
-            full.append({"Day":d,"Slot":s,"Calls":val})
-    return pd.DataFrame(full)
-
-def required_agents_per_slot(slot_calls: float, aht: int, target_al_pct: float) -> int:
-    """
-    For a given slot forecast (calls in 30-min), compute agents required so that AL >= target.
-    required_capacity = calls / (target_al / 100).
-    agents = ceil(required_capacity / cap_per_slot)
-    """
-    if slot_calls <= 0:
+def required_agents_for_calls(calls: float, aht_seconds: int, target_al_pct: float) -> int:
+    """Given hourly calls, compute minimal agents needed to hit target AL for that hour."""
+    if calls <= 0:
         return 0
-    cap_slot = effective_capacity_per_slot(aht)
-    required_capacity = slot_calls / max(0.01, (target_al_pct / 100.0))
-    agents = math.ceil(required_capacity / max(1e-9, cap_slot))
+    cap_agent = effective_capacity_per_hour(aht_seconds)
+    required_capacity = calls / max(0.01, (target_al_pct / 100.0))
+    agents = math.ceil(required_capacity / max(1e-9, cap_agent))
     return max(0, agents)
 
-def build_slot_requirements(slot_calls_df: pd.DataFrame, aht:int, target_al:float) -> pd.DataFrame:
-    df = slot_calls_df.copy()
-    df["RequiredAgents"] = df["Calls"].apply(lambda c: required_agents_per_slot(c,aht,target_al))
-    return df
-
-# Excel writer factory (try xlsxwriter first, then openpyxl)
 def get_excel_writer(buf):
     try:
         import xlsxwriter  # noqa
@@ -182,78 +84,63 @@ def get_excel_writer(buf):
             import openpyxl  # noqa
             return pd.ExcelWriter(buf, engine="openpyxl")
         except Exception:
-            raise RuntimeError("Please install either 'xlsxwriter' or 'openpyxl' to enable Excel exports.")
+            raise RuntimeError("Install xlsxwriter or openpyxl to enable Excel exports.")
 
-# --------------------- STREAMLIT APP ---------------------
-st.set_page_config(page_title="Roster Planner (7:00-21:00)", layout="wide")
-st.title("📞 Call Center Roster Planner — 07:00 to 21:00 | 9h shifts | active 7h50m")
-st.caption("Upload champions & calls, manage leaves, auto-generate balanced roster (split & straight), edit manually and download.")
+# ---------------- STREAMLIT UI ----------------
+st.set_page_config(page_title="Date-Hourly Roster Planner", layout="wide")
+st.title("📅 Date-hourly Roster Planner — 07:00–21:00 shifts | active 7h50m")
+st.caption("Upload champions and an hourly calls file (Date,Hour,Calls). Manage leaves directly in the roster table.")
 
-# Sidebar — settings, templates, uploads
 with st.sidebar:
-    st.header("Settings")
+    st.header("Settings & Uploads")
     target_al = st.number_input("AL Target (%)", min_value=70, max_value=100, value=95)
-    aht_sec = st.number_input("AHT (seconds)", min_value=30, max_value=1200, value=DEFAULT_AHT_SECONDS)
-    split_limit = st.number_input("Max split shifts per agent (week)", min_value=0, max_value=7, value=3)
+    aht_sec = st.number_input("AHT (seconds)", min_value=30, max_value=1200, value=202)
+    max_split_per_week = st.number_input("Max split shifts per agent / week", min_value=0, max_value=7, value=3)
     st.markdown("---")
-    st.subheader("Templates & Uploads")
-    st.write("Download templates to fill and upload back.")
-    # Champions template
+    st.subheader("Upload Files")
+    champions_file = st.file_uploader("Champions Excel (first sheet used)", type=["xlsx"])
+    calls_file = st.file_uploader("Calls Excel (Hourly_Data sheet)", type=["xlsx"])
+    st.markdown("---")
+    st.write("Notes:")
+    st.write("- Champion file must have a 'name' column (case-insensitive). Optional: primary_lang, secondary_langs, calls_per_hour, can_split.")
+    st.write("- Calls file: sheet 'Hourly_Data' with columns: Date (YYYY-MM-DD), Hour (0-23), Calls (numeric).")
+
+    st.markdown("---")
+    st.header("Download Templates")
     def champions_template_bytes():
         df = pd.DataFrame({
-            "name":["Revathi","Pasang","Kavya S"],
-            "primary_lang":["ka","ka","ka"],
-            "secondary_langs":["hi,te","te,ta","te"],
-            "calls_per_hour":[14,13,15],
-            "can_split":[True,False,False]
+            "name": ["Revathi", "Anjali", "Rakesh"],
+            "primary_lang": ["ka", "hi", "te"],
+            "secondary_langs": ["te,hi", "ka", "ka"],
+            "calls_per_hour": [12, 11, 10],
+            "can_split": [True, True, False]
         })
         buf = io.BytesIO()
         with get_excel_writer(buf) as writer:
             df.to_excel(writer, sheet_name="Champions", index=False)
         return buf.getvalue()
-    st.download_button("Download Champions Template", champions_template_bytes(), file_name="champions_template.xlsx")
+    st.download_button("Champions template", champions_template_bytes(), file_name="champions_template.xlsx")
 
-    # Calls template
     def calls_template_bytes():
-        daily = pd.DataFrame({"Day":DAYS, "Calls":[2000,1800,2200,2100,2300,2400,2000]})
-        hourly_rows=[]
-        for d in DAYS:
-            for h in range(24):
-                hourly_rows.append({"Day":d,"Hour":h,"Calls":100 if 7<=h<21 else 10})
-        hourly = pd.DataFrame(hourly_rows)
-        buf = io.BytesIO()
-        with get_excel_writer(buf) as writer:
-            daily.to_excel(writer, sheet_name="Daily_Data", index=False)
-            hourly.to_excel(writer, sheet_name="Hourly_Data", index=False)
-        return buf.getvalue()
-    st.download_button("Download Calls Template", calls_template_bytes(), file_name="calls_template.xlsx")
-
-    # Blank leave template
-    def leave_template_bytes(names=None):
-        if names is None:
-            names = ["Revathi","Pasang","Kavya S"]
-        rows=[]
-        for d in DAYS:
-            for n in names:
-                rows.append({"Day":d,"Champion":n,"Leave Type":""})
+        # Example for two dates
+        dates = [pd.Timestamp.today().normalize().date(), pd.Timestamp.today().normalize().date() + pd.Timedelta(days=1)]
+        rows = []
+        for d in dates:
+            for h in range(7, 21):  # only business hours sample
+                rows.append({"Date": str(d), "Hour": h, "Calls": 100})
         df = pd.DataFrame(rows)
         buf = io.BytesIO()
         with get_excel_writer(buf) as writer:
-            df.to_excel(writer, sheet_name="Leave_Status", index=False)
+            df.to_excel(writer, sheet_name="Hourly_Data", index=False)
         return buf.getvalue()
-    st.download_button("Download Blank Leave Template", leave_template_bytes(), file_name="leave_template.xlsx")
-
-    st.markdown("---")
-    st.caption("Upload champions file first, then calls file. After upload, use the main UI to manage leaves, edit roster and download outputs.")
-    champions_file = st.file_uploader("Upload Champions Excel (first sheet used)", type=["xlsx"])
-    calls_file = st.file_uploader("Upload Calls Excel (Hourly_Data or Daily_Data)", type=["xlsx"])
+    st.download_button("Calls (hourly) template", calls_template_bytes(), file_name="calls_hourly_template.xlsx")
 
 # Validate uploads
 if champions_file is None:
-    st.warning("Please upload Champions file (use Champions Template if needed).")
+    st.warning("Upload champions file to begin.")
     st.stop()
 if calls_file is None:
-    st.warning("Please upload Calls file (Hourly_Data or Daily_Data).")
+    st.warning("Upload calls file (Hourly_Data) to begin.")
     st.stop()
 
 # Load champions
@@ -262,424 +149,383 @@ try:
     champ_sheet = x.sheet_names[0]
     champs_df = pd.read_excel(x, champ_sheet)
 except Exception as e:
-    st.error(f"Failed reading champions file: {e}")
+    st.error(f"Error reading champions file: {e}")
     st.stop()
 
-# Normalize champions
+# normalize columns
 champs_df.columns = [c.strip() for c in champs_df.columns]
-if "name" not in [c.lower() for c in champs_df.columns]:
-    # try lowercase names
-    if "name" not in champs_df.columns and "Name" not in champs_df.columns:
-        st.error("Champions sheet must contain a 'name' column (case-insensitive).")
-        st.stop()
-# Make column names lowercase keys for safe access
+cols_lower = [c.lower() for c in champs_df.columns]
+if "name" not in cols_lower:
+    st.error("Champions sheet must contain 'name' column.")
+    st.stop()
+
+# rename columns to lowercase
 champs_df.columns = [c.lower() for c in champs_df.columns]
-# Ensure required columns exist
-for col in ["primary_lang","secondary_langs","calls_per_hour","can_split"]:
-    if col not in champs_df.columns:
-        champs_df[col] = None
-# Normalize types
+for optional_col in ["primary_lang", "secondary_langs", "calls_per_hour", "can_split"]:
+    if optional_col not in champs_df.columns:
+        champs_df[optional_col] = None
+
 champs_df["name"] = champs_df["name"].astype(str).str.strip()
-# boolean convert
-try:
-    champs_df["can_split"] = champs_df["can_split"].astype(bool)
-except Exception:
-    champs_df["can_split"] = champs_df["can_split"].apply(lambda v: str(v).strip().lower() in ("true","1","yes"))
+# boolean convert for can_split
+def to_bool(v):
+    try:
+        return bool(v) if isinstance(v, (bool, int)) else str(v).strip().lower() in ("true","1","yes")
+    except Exception:
+        return False
+champs_df["can_split"] = champs_df["can_split"].apply(to_bool)
 
+champ_names = champs_df["name"].tolist()
 
-# Load calls file and normalize to hourly
+# Load calls (date+hour)
 try:
     x = pd.ExcelFile(calls_file)
-    if "Hourly_Data" in x.sheet_names:
-        calls_raw = pd.read_excel(x, "Hourly_Data")
-        hourly_calls_df = ensure_calls_hourly(calls_raw)
-    elif "Daily_Data" in x.sheet_names:
-        daily_raw = pd.read_excel(x, "Daily_Data")
-        hourly_df = ensure_calls_hourly(daily_raw)
-        hourly_calls_df = hourly_df
-    else:
-        st.error("Calls file must contain either 'Hourly_Data' or 'Daily_Data' sheet.")
+    if "Hourly_Data" not in x.sheet_names:
+        st.error("Calls file must have sheet 'Hourly_Data' with columns Date, Hour, Calls.")
         st.stop()
+    calls_raw = pd.read_excel(x, "Hourly_Data")
 except Exception as e:
-    st.error(f"Failed reading calls file: {e}")
+    st.error(f"Error reading calls file: {e}")
     st.stop()
 
-# Convert hourly to slot-level calls
-slot_calls_df = hourly_to_slot_calls(hourly_calls_df)
+# Validate calls columns
+calls_raw.columns = [c.strip() for c in calls_raw.columns]
+required_cols = {"Date","Hour","Calls"}
+if not required_cols.issubset(set(calls_raw.columns)):
+    st.error("Hourly_Data sheet must have columns: Date, Hour, Calls.")
+    st.stop()
 
-# Build slot requirements per target AL and AHT
-slot_req_df = build_slot_requirements(slot_calls_df, int(aht_sec), float(target_al))
+# Normalize Date column to date objects and Hour to int
+calls_raw["Date"] = pd.to_datetime(calls_raw["Date"]).dt.date
+calls_raw["Hour"] = calls_raw["Hour"].astype(int)
+calls_raw["Calls"] = pd.to_numeric(calls_raw["Calls"], errors="coerce").fillna(0.0)
 
-# Session-state leaves
-if "leaves" not in st.session_state:
-    st.session_state["leaves"] = {d: {} for d in DAYS}
+# Build list of unique dates (in sorted order)
+unique_dates = sorted(calls_raw["Date"].unique())
+if len(unique_dates) == 0:
+    st.error("No dates found in calls file.")
+    st.stop()
 
-# Ability to download current leave status and upload updates
-def current_leave_status_bytes():
-    rows=[]
-    names = champs_df["name"].tolist()
-    for d in DAYS:
-        for n in names:
-            status = "Active"
-            lt = ""
-            if n in st.session_state["leaves"].get(d, {}):
-                status = "On Leave"; lt = st.session_state["leaves"][d][n]
-            rows.append({"Day":d,"Champion":n,"Status":status,"Leave Type":lt})
-    df = pd.DataFrame(rows)
-    buf = io.BytesIO()
-    with get_excel_writer(buf) as writer:
-        df.to_excel(writer, sheet_name="Leave_Status", index=False)
-    return buf.getvalue()
+# Build hourly calls pivot for each date
+# We'll compute required agents per hour per date
+def build_requirements(calls_df: pd.DataFrame, aht:int, target_al:float) -> pd.DataFrame:
+    rows = []
+    for d in sorted(calls_df["Date"].unique()):
+        df_day = calls_df[calls_df["Date"] == d]
+        # ensure hours 0..23 present
+        hours = {h:0.0 for h in range(24)}
+        for _,r in df_day.iterrows():
+            hours[int(r["Hour"])] = float(r["Calls"])
+        for h in range(24):
+            calls = hours[h]
+            req = required_agents_for_calls(calls, aht, target_al)
+            rows.append({"Date": d, "Hour": h, "Calls": calls, "RequiredAgents": req})
+    return pd.DataFrame(rows)
 
-st.download_button("Download Current Leave Status", current_leave_status_bytes(), file_name="current_leave_status.xlsx")
+req_df = build_requirements(calls_raw, int(aht_sec), float(target_al))
 
-uploaded_leave_updates = st.file_uploader("Upload Leave Updates (sheet with Day,Champion,Leave Type)", type=["xlsx"])
-if uploaded_leave_updates is not None:
-    try:
-        xl = pd.ExcelFile(uploaded_leave_updates)
-        sheet = xl.sheet_names[0]
-        ldf = pd.read_excel(xl, sheet)
-        # normalize columns
-        ldf.columns = [c.strip() for c in ldf.columns]
-        for _,r in ldf.iterrows():
-            day = str(r.get("Day","")).strip()
-            champ = str(r.get("Champion","")).strip()
-            lt = r.get("Leave Type","")
-            if day in DAYS and champ in champs_df["name"].tolist():
-                if pd.notna(lt) and str(lt).strip() != "":
-                    st.session_state["leaves"].setdefault(day, {})
-                    st.session_state["leaves"][day][champ] = str(lt).strip()
-                else:
-                    # remove leave if exists
-                    if champ in st.session_state["leaves"].get(day, {}):
-                        del st.session_state["leaves"][day][champ]
-        st.success("Applied leave updates from file.")
-    except Exception as e:
-        st.error(f"Failed to apply leave updates: {e}")
+# ---------------- Build initial roster ----------------
+# roster structure = { date: { champ_name: { "shift": "", "leave": "", "is_split": False } } }
+def empty_roster_for_dates(champ_names: List[str], dates: List) -> Dict:
+    roster = {}
+    for d in dates:
+        roster[d] = {name: {"shift":"","leave":"","is_split":False} for name in champ_names}
+    return roster
 
-# Build initial empty roster and apply leaves
-champ_names = champs_df["name"].tolist()
-def empty_roster(champ_names: List[str]):
-    r = {d: {} for d in DAYS}
-    for d in DAYS:
-        for n in champ_names:
-            r[d][n] = {"shift":"","leave":"","is_split":False}
-    return r
+roster = empty_roster_for_dates(champ_names, unique_dates)
 
-roster = empty_roster(champ_names)
-# apply leaves
-for d in DAYS:
-    for n in champ_names:
-        if n in st.session_state["leaves"].get(d, {}):
-            roster[d][n]["leave"] = st.session_state["leaves"][d][n]
+# Apply greedy assignment per date (hourly basis) trying to cover RequiredAgents
+# simple greedy: iterate champs and pick best straight or split if helps evening
+cap_per_agent_hour = effective_capacity_per_hour = None  # define below
 
-# Assignment: slot-level greedy per day
-# compute required per slot for day
-prior_split_count = {n: 0 for n in champ_names}
-cap_slot = effective_capacity_per_slot(int(aht_sec))
+def per_agent_effective_capacity_per_hour(aht_seconds:int) -> float:
+    cap_full = per_agent_capacity_per_hour(aht_seconds)
+    active_fraction = ACTIVE_TIME_SECONDS / (SHIFT_DURATION_HOURS * 3600.0)
+    return cap_full * active_fraction
 
-for d in DAYS:
-    # build required array for day per slot
-    required_slots = slot_req_df[slot_req_df["Day"]==d].sort_values("Slot")["RequiredAgents"].values
-    if len(required_slots) == 0:
-        required_slots = np.zeros(SLOTS_PER_DAY, dtype=int)
-    else:
-        required_slots = np.asarray(required_slots, dtype=int)
-    # current coverage from roster (initially zero except manual leaves)
-    coverage = np.zeros(SLOTS_PER_DAY, dtype=int)
-    # mark available champions for day (not on leave)
-    available = [n for n in champ_names if not roster[d][n]["leave"]]
-    # rotate available for fairness by day index
-    rot = DAYS.index(d)
-    available = available[rot:] + available[:rot]
-    # for each champ in available assign best shift covering deficit
-    deficit = required_slots - coverage
-    straight_starts = [s for s,e in STRAIGHT_OPTIONS]
-    # convert straight start decimals to slot indices for candidates
-    straight_slot_candidates = [time_to_slot(s) for s in straight_starts]
+cap_per_agent_hour = per_agent_effective_capacity_per_hour(int(aht_sec))
+
+# assign function (hourly resolution)
+def assign_for_date(date, req_df_day: pd.DataFrame, champs_df: pd.DataFrame, roster_day: Dict[str, Dict], split_limit: int, prior_split_count: Dict[str,int]):
+    # required array per hour
+    required = np.zeros(24, dtype=int)
+    for _,r in req_df_day.iterrows():
+        required[int(r["Hour"])] = int(r["RequiredAgents"])
+    coverage = np.zeros(24, dtype=int)
+    # initial coverage (none assigned except may have manual leave)
+    # available champs not on leave
+    available = [c for c in champs_df["name"].tolist() if roster_day[c]["leave"] == ""]
+    # rotate available by date index for fairness
+    idx = unique_dates.index(date)
+    available = available[idx:] + available[:idx]
     for champ in available:
-        if (deficit <= 0).all():
+        if (required - coverage <= 0).all():
             break
-        can_split = bool(champs_df.loc[champs_df["name"]==champ, "can_split"].iloc[0])
-        evening_def = deficit[ (17*SLOTS_PER_HOUR):(21*SLOTS_PER_HOUR) ].clip(min=0).sum()
-        use_split = can_split and (prior_split_count.get(champ,0) < int(split_limit)) and (evening_def > 0)
+        # decide use split
+        can_split = bool(champs_df.loc[champs_df["name"]==champ,"can_split"].iloc[0])
+        evening_deficit = (required - coverage)[17:21].clip(min=0).sum()
+        use_split = can_split and (prior_split_count.get(champ,0) < split_limit) and (evening_deficit > 0)
         if use_split:
-            # evaluate SPLIT_OPTIONS to find best gain
-            best_opt=None; best_gain=-1
-            for (s1_e1, s2_e2) in SPLIT_OPTIONS:
-                s1, e1 = s1_e1[0], s1_e1[1] if isinstance(s1_e1, tuple) else (s1_e1[0], s1_e1[1])
-                # but SPLIT_OPTIONS defined as ((s1,e1),(s2,e2)) — ensure unpack
-            # SPLIT_OPTIONS is tuple of pairs; fix iteration:
-            for opt in SPLIT_OPTIONS:
-                if isinstance(opt[0], tuple):
-                    (s1,e1),(s2,e2) = opt
-                else:
-                    s1,e1 = opt[0], opt[1]
-                    s2,e2 = opt[2], opt[3]
-                s1_slot, e1_slot = time_to_slot(s1), time_to_slot(e1)
-                s2_slot, e2_slot = time_to_slot(s2), time_to_slot(e2)
-                s1_slot = max(0, min(SLOTS_PER_DAY, s1_slot))
-                e1_slot = max(0, min(SLOTS_PER_DAY, e1_slot))
-                s2_slot = max(0, min(SLOTS_PER_DAY, s2_slot))
-                e2_slot = max(0, min(SLOTS_PER_DAY, e2_slot))
-                gain = deficit[s1_slot:e1_slot].clip(min=0).sum() + deficit[s2_slot:e2_slot].clip(min=0).sum()
-                if gain > best_gain:
-                    best_gain = gain; best_opt = (s1_slot,e1_slot,s2_slot,e2_slot, s1,e1,s2,e2)
-            if best_gain <= 0:
+            # evaluate split options and straight options
+            best_split = None; best_split_gain = -1
+            for s1,e1,s2,e2 in SPLIT_OPTIONS:
+                s1_slot = int(math.floor(s1))
+                e1_slot = int(math.ceil(e1))
+                s2_slot = int(math.floor(s2))
+                e2_slot = int(math.ceil(e2))
+                # clip to 0..23
+                s1_slot = max(0,min(23,s1_slot))
+                e1_slot = max(0,min(24,e1_slot))
+                s2_slot = max(0,min(23,s2_slot))
+                e2_slot = max(0,min(24,e2_slot))
+                gain = (required[s1_slot:e1_slot] - coverage[s1_slot:e1_slot]).clip(min=0).sum() + (required[s2_slot:e2_slot] - coverage[s2_slot:e2_slot]).clip(min=0).sum()
+                if gain > best_split_gain:
+                    best_split_gain = gain; best_split = (s1_slot,e1_slot,s2_slot,e2_slot,s1,e1,s2,e2)
+            if best_split is None or best_split_gain <= 0:
                 # fallback to straight
-                best_s=None; best_gain_s=-1
-                for s_dec in [s for s,e in STRAIGHT_OPTIONS]:
-                    s_slot = time_to_slot(s_dec)
-                    e_slot = s_slot + SHIFT_DURATION_SLOTS
-                    if e_slot > SLOTS_PER_DAY:
-                        continue
-                    gain = deficit[s_slot:e_slot].clip(min=0).sum()
-                    if gain > best_gain_s:
-                        best_gain_s=gain; best_s=s_slot
-                if best_s is None or best_gain_s <= 0:
+                best_straight = None; best_gain = -1
+                for s,e in STRAIGHT_SHIFTS:
+                    s_slot = int(s); e_slot = int(e)
+                    if e_slot - s_slot != SHIFT_DURATION_HOURS:
+                        pass
+                    gain = (required[s_slot:e_slot] - coverage[s_slot:e_slot]).clip(min=0).sum()
+                    if gain > best_gain:
+                        best_gain = gain; best_straight = (s_slot,e_slot)
+                if best_straight is None or best_gain <= 0:
                     continue
-                # assign straight
-                s_slot = best_s; e_slot = s_slot + SHIFT_DURATION_SLOTS
-                roster[d][champ]["shift"] = f"Straight {slot_to_time_str(s_slot)}-{slot_to_time_str(e_slot)}"
-                roster[d][champ]["is_split"] = False
-                for h in range(s_slot, e_slot):
-                    deficit[h] -= 1
+                s_slot,e_slot = best_straight
+                roster_day[champ]["shift"] = f"Straight {s_slot:02d}:00-{e_slot:02d}:00"
+                roster_day[champ]["is_split"] = False
+                for h in range(s_slot,e_slot):
+                    coverage[h] += 1
             else:
-                # assign best split
-                s1_slot,e1_slot,s2_slot,e2_slot, s1_dec,e1_dec,s2_dec,e2_dec = best_opt
-                roster[d][champ]["shift"] = f"Split {slot_to_time_str(s1_slot)}-{slot_to_time_str(e1_slot)} & {slot_to_time_str(s2_slot)}-{slot_to_time_str(e2_slot)}"
-                roster[d][champ]["is_split"] = True
-                prior_split_count[champ] = prior_split_count.get(champ,0)+1
+                s1_slot,e1_slot,s2_slot,e2_slot,s1_dec,e1_dec,s2_dec,e2_dec = best_split
+                roster_day[champ]["shift"] = f"Split {format_time_from_decimal(s1_dec)}-{format_time_from_decimal(e1_dec)} & {format_time_from_decimal(s2_dec)}-{format_time_from_decimal(e2_dec)}"
+                roster_day[champ]["is_split"] = True
+                prior_split_count[champ] = prior_split_count.get(champ,0) + 1
                 for h in range(s1_slot,e1_slot):
-                    deficit[h] -= 1
+                    coverage[h] += 1
                 for h in range(s2_slot,e2_slot):
-                    deficit[h] -= 1
+                    coverage[h] += 1
         else:
-            # pick best straight start
-            best_s=None; best_gain=-1
-            for s_dec in [s for s,e in STRAIGHT_OPTIONS]:
-                s_slot = time_to_slot(s_dec)
-                e_slot = s_slot + SHIFT_DURATION_SLOTS
-                if e_slot > SLOTS_PER_DAY:
-                    continue
-                gain = deficit[s_slot:e_slot].clip(min=0).sum()
+            # pick best straight
+            best_straight = None; best_gain = -1
+            for s,e in STRAIGHT_SHIFTS:
+                s_slot = int(s); e_slot = int(e)
+                gain = (required[s_slot:e_slot] - coverage[s_slot:e_slot]).clip(min=0).sum()
                 if gain > best_gain:
-                    best_gain=gain; best_s=s_slot
-            if best_s is None or best_gain <= 0:
+                    best_gain = gain; best_straight = (s_slot,e_slot)
+            if best_straight is None or best_gain <= 0:
                 continue
-            s_slot = best_s; e_slot = s_slot + SHIFT_DURATION_SLOTS
-            roster[d][champ]["shift"] = f"Straight {slot_to_time_str(s_slot)}-{slot_to_time_str(e_slot)}"
-            roster[d][champ]["is_split"] = False
+            s_slot,e_slot = best_straight
+            roster_day[champ]["shift"] = f"Straight {s_slot:02d}:00-{e_slot:02d}:00"
+            roster_day[champ]["is_split"] = False
             for h in range(s_slot,e_slot):
-                deficit[h] -= 1
+                coverage[h] += 1
 
-# --------------------- KPI & AL Prediction ---------------------
-cap_slot = effective_capacity_per_slot(int(aht_sec))
-# compute weekly totals and per-day predicted AL
-weekly_calls_per_day = slot_calls_df.groupby("Day", as_index=False)["Calls"].sum().rename(columns={"Calls":"WeeklyCalls"})
-total_weekly_calls = weekly_calls_per_day["WeeklyCalls"].sum()
-avg_daily_calls = weekly_calls_per_day["WeeklyCalls"].mean()
-peak_day = weekly_calls_per_day.loc[weekly_calls_per_day["WeeklyCalls"].idxmax(),"Day"] if not weekly_calls_per_day.empty else ""
+# Perform assignment for each date
+prior_split_count = {name: 0 for name in champ_names}
+for d in unique_dates:
+    df_day = req_df[req_df["Date"]==d]
+    assign_for_date(d, df_day, champs_df, roster[d], int(max_split_per_week), prior_split_count)
 
-summary_rows=[]
-weekly_capacity_sum = 0.0
-for d in DAYS:
-    # assigned agents count (agents with shift and not on leave)
-    assigned_agents = sum(1 for v in roster[d].values() if v["shift"] and not v["leave"])
-    # coverage per slot
-    cov_slots = np.zeros(SLOTS_PER_DAY, dtype=int)
-    for n in champ_names:
-        info = roster[d][n]
+# ---------------- Compute AL predictions (per date and overall) ----------------
+cap_per_agent_hour = per_agent_effective_capacity_per_hour = None
+def per_agent_effective_capacity_per_hour(aht):
+    full = per_agent_capacity_per_hour(aht)  # from earlier helper
+    frac = ACTIVE_TIME_SECONDS / (SHIFT_DURATION_HOURS * 3600.0)
+    return full * frac
+
+def per_agent_capacity_per_hour(aht_seconds):
+    return 3600.0 / max(1, aht_seconds)
+
+cap_per_agent_hour = per_agent_effective_capacity_per_hour(int(aht_sec))
+
+summary_rows = []
+total_calls_all_dates = 0.0
+total_capacity_all_dates = 0.0
+
+for d in unique_dates:
+    # compute coverage per hour
+    cov = np.zeros(24, dtype=int)
+    for champ in champ_names:
+        info = roster[d][champ]
         if info["leave"] or not info["shift"]:
             continue
-        shift_str = info["shift"]
-        if shift_str.startswith("Straight"):
-            # parse times
+        shift = info["shift"]
+        if shift.startswith("Straight"):
             try:
-                times = shift_str.split()[1]
-                s_str, e_str = times.split("-")
-                s_slot = int(s_str.split(":")[0]) * SLOTS_PER_HOUR + (int(s_str.split(":")[1])//30)
-                e_slot = int(e_str.split(":")[0]) * SLOTS_PER_HOUR + (int(e_str.split(":")[1])//30)
-            except Exception:
-                s_slot = 0; e_slot = 0
-            for s in range(s_slot, e_slot):
-                if 0 <= s < SLOTS_PER_DAY:
-                    cov_slots[s] += 1
-        elif shift_str.startswith("Split"):
-            try:
-                parts = shift_str.replace("Split","").strip().split("&")
-                for p in parts:
-                    p = p.strip()
-                    s_str,e_str = p.split("-")
-                    s_slot = int(s_str.split(":")[0]) * SLOTS_PER_HOUR + (int(s_str.split(":")[1])//30)
-                    e_slot = int(e_str.split(":")[0]) * SLOTS_PER_HOUR + (int(e_str.split(":")[1])//30)
-                    for s in range(s_slot, e_slot):
-                        if 0 <= s < SLOTS_PER_DAY:
-                            cov_slots[s] += 1
+                times = shift.split()[1]
+                start, end = times.split("-")
+                s_h = int(start.split(":")[0]); e_h = int(end.split(":")[0])
+                for h in range(s_h, e_h):
+                    cov[h] += 1
             except Exception:
                 pass
-    # compute slot-level AL
-    day_slot_calls = slot_calls_df[slot_calls_df["Day"]==d].sort_values("Slot")["Calls"].values
-    if len(day_slot_calls)==0:
-        day_slot_calls = np.zeros(SLOTS_PER_DAY)
-    cap = cov_slots * cap_slot  # effective capacity in calls per slot
+        elif shift.startswith("Split"):
+            try:
+                _, blocks = shift.split(" ",1)
+                parts = blocks.split("&")
+                for p in parts:
+                    p = p.strip()
+                    stime, etime = p.split("-")
+                    s_h = int(stime.split(":")[0]); e_h = int(etime.split(":")[0])
+                    for h in range(s_h, e_h):
+                        if 0 <= h < 24:
+                            cov[h] += 1
+            except Exception:
+                pass
+    # calls per hour for date
+    calls_day = calls_raw[calls_raw["Date"]==d].set_index("Hour")["Calls"].reindex(range(24), fill_value=0).values
+    capacity = cov * cap_per_agent_hour
+    # per-hour AL in percent
     with np.errstate(divide='ignore', invalid='ignore'):
-        al_slots = np.where(day_slot_calls>0, np.minimum(100.0, (cap / day_slot_calls) * 100.0), 100.0)
-    day_al = float(np.round(np.mean(al_slots),2)) if len(al_slots)>0 else 100.0
-    summary_rows.append({"Day":d, "WeeklyCalls": float(day_slot_calls.sum()), "AssignedAgents": assigned_agents, "Predicted_AL%": day_al})
-    weekly_capacity_sum += cap.sum()
+        al_hour = np.where(calls_day > 0, np.minimum(100.0, (capacity / calls_day) * 100.0), 100.0)
+    daily_al = float(np.round(np.mean(al_hour),2)) if len(al_hour)>0 else 100.0
+    total_calls_all_dates += calls_day.sum()
+    total_capacity_all_dates += capacity.sum()
+    assigned_agents = sum(1 for v in roster[d].values() if v["shift"] and not v["leave"])
+    summary_rows.append({"Date": d, "TotalCalls": float(calls_day.sum()), "AssignedAgents": int(assigned_agents), "Predicted_AL%": daily_al})
 
-weekly_al_pct = float(np.round(min(100.0, (weekly_capacity_sum / max(1.0, total_weekly_calls)) * 100.0),2)) if total_weekly_calls>0 else 100.0
-
+weekly_al = float(np.round(min(100.0, (total_capacity_all_dates / max(1.0, total_calls_all_dates)) * 100.0), 2)) if total_calls_all_dates > 0 else 100.0
 summary_df = pd.DataFrame(summary_rows)
 
-# --------------------- UI OUTPUT ---------------------
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Weekly Calls (total)", f"{int(total_weekly_calls):,}")
-col2.metric("Average Daily Calls", f"{int(avg_daily_calls):,}")
-col3.metric("Peak Day", f"{peak_day}")
-col4.metric("Predicted Weekly AL%", f"{weekly_al_pct}%")
+# ---------------- UI: display metrics and summary ----------------
+st.markdown("## Summary & AL prediction")
+col1, col2, col3 = st.columns(3)
+col1.metric("Dates covered", f"{len(unique_dates)}")
+col2.metric("Total calls (all dates)", f"{int(total_calls_all_dates):,}")
+col3.metric("Predicted AL (overall)", f"{weekly_al}%")
 
-st.markdown("---")
-st.header("Day-wise Summary")
 st.dataframe(summary_df, use_container_width=True)
 
 # Recommendations
-reco=[]
-for _,r in summary_df.iterrows():
-    d = r["Day"]
-    peak_needed = int(slot_req_df[slot_req_df["Day"]==d]["RequiredAgents"].max()) if not slot_req_df[slot_req_df["Day"]==d].empty else 0
+reco = []
+for _, r in summary_df.iterrows():
+    d = r["Date"]
+    peak_needed = int(req_df[req_df["Date"]==d]["RequiredAgents"].max()) if not req_df[req_df["Date"]==d].empty else 0
     assigned = int(r["AssignedAgents"])
     if assigned < peak_needed:
-        reco.append(f"🔺 {d}: Need +{peak_needed-assigned} agent(s) at peak to reach {int(target_al)}% AL.")
+        reco.append(f"🔺 {d}: Add +{peak_needed-assigned} agent(s) at peak to reach {int(target_al)}% AL.")
     elif assigned > peak_needed + 2:
-        reco.append(f"🔻 {d}: Consider reducing {assigned-peak_needed} agent(s); currently above requirement.")
+        reco.append(f"🔻 {d}: Consider reducing {assigned-peak_needed} agent(s); you are above requirement.")
 if reco:
     st.warning("\n".join(reco))
 else:
-    st.success("Roster is balanced vs forecast.")
+    st.success("Roster appears balanced vs hourly forecasts.")
 
-# --------------------- Editable Roster (Sample Format) ---------------------
+# ---------------- Roster Editor (Date-based sample pivot) ----------------
 st.markdown("---")
-st.header("Roster (editable) — sample format")
+st.header("Roster (editable) — Date × Champions sample format")
 
-# Build sample pivot: champions as rows, columns Mon..Sun with shift or WO
-sample_rows=[]
-for n in champ_names:
-    row = {"Champion": n}
-    for d in DAYS:
-        info = roster[d][n]
-        cell = "WO" if info["leave"] else (info["shift"] if info["shift"] else "")
-        row[d] = cell
-    sample_rows.append(row)
-sample_df = pd.DataFrame(sample_rows)
+# Build pivot where rows = champion, columns = date strings (ISO)
+date_cols = [str(d) for d in unique_dates]
+pivot_rows = []
+for name in champ_names:
+    row = {"Champion": name}
+    for d in unique_dates:
+        info = roster[d][name]
+        if info["leave"]:
+            row[str(d)] = info["leave"] if info["leave"] else "WO"
+        else:
+            row[str(d)] = info["shift"]
+    pivot_rows.append(row)
+pivot_df = pd.DataFrame(pivot_rows)
 
-st.caption("Edit any cell (enter shift string like 'Straight 07:00-16:00' or 'Split 07:00-11:00 & 16:30-21:00', or enter 'WO' to mark leave). Click 'Apply Manual Edits' to save.")
-edited = st.data_editor(sample_df, num_rows="dynamic", use_container_width=True, key="roster_editor")
+st.caption("Edit cells to adjust shifts or mark leave. Enter 'WO' or any Leave string to mark leave. Format for shifts: e.g. 'Straight 07:00-16:00' or 'Split 07:00-11:00 & 16:30-21:00'. After edits click 'Apply Manual Edits'.")
+
+edited = st.data_editor(pivot_df, num_rows="dynamic", use_container_width=True, key="roster_editor")
 
 if st.button("Apply Manual Edits"):
-    # apply edits back to roster structure
-    for _,r in edited.iterrows():
-        nm = r["Champion"]
-        for d in DAYS:
-            val = str(r[d]).strip()
-            if val.upper() == "WO":
-                roster[d][nm]["leave"] = "ManualLeave"
-                roster[d][nm]["shift"] = ""
-                roster[d][nm]["is_split"] = False
-            elif val == "" or val.lower() in ("nan","none"):
-                roster[d][nm]["leave"] = ""
-                roster[d][nm]["shift"] = ""
-                roster[d][nm]["is_split"] = False
+    # apply edits into roster structure
+    for _, r in edited.iterrows():
+        name = r["Champion"]
+        for d in unique_dates:
+            cell = str(r[str(d)]).strip()
+            if cell == "" or cell.lower() in ("nan","none"):
+                roster[d][name]["shift"] = ""
+                roster[d][name]["leave"] = ""
+                roster[d][name]["is_split"] = False
+            elif cell.upper() == "WO" or (not cell.startswith("Straight") and not cell.startswith("Split")):
+                # mark as leave; accept arbitrary leave text
+                roster[d][name]["leave"] = cell if cell.upper() != "WO" else "WO"
+                roster[d][name]["shift"] = ""
+                roster[d][name]["is_split"] = False
             else:
-                # treat as shift string
-                roster[d][nm]["leave"] = ""
-                roster[d][nm]["shift"] = val
-                roster[d][nm]["is_split"] = "Split" in val
+                roster[d][name]["leave"] = ""
+                roster[d][name]["shift"] = cell
+                roster[d][name]["is_split"] = ("Split" in cell)
     st.success("Manual edits applied. Recomputing AL and summary...")
-    # recompute summary (same method as above)
-    # (For brevity, just refresh the page by re-running; but we recompute here)
-    # In Streamlit, simply rerun by setting a small session flag
     st.experimental_rerun()
 
-# --------------------- Downloads ---------------------
+# ---------------- Downloads ----------------
 st.markdown("---")
 st.header("Downloads")
 
-# full long roster
-full_long = []
-for d in DAYS:
-    for n in champ_names:
-        info = roster[d][n]
-        full_long.append({"Day":d,"Champion":n,"Shift":info["shift"],"Leave":info["leave"],"Split?":info["is_split"]})
-full_long_df = pd.DataFrame(full_long)
+# Build long roster (Date, Champion, Shift, Leave)
+long_rows = []
+for d in unique_dates:
+    for name in champ_names:
+        info = roster[d][name]
+        long_rows.append({"Date": d, "Champion": name, "Shift": info["shift"], "Leave": info["leave"], "Split?": info["is_split"]})
+long_df = pd.DataFrame(long_rows)
 
-# sample pivot (Champion rows, Mon..Sun)
-sample_pivot = full_long_df.pivot(index="Champion", columns="Day", values="Shift").reset_index()
-# set 'WO' where leave present
-for _,row in full_long_df.iterrows():
-    if row["Leave"]:
-        sample_pivot.loc[sample_pivot["Champion"]==row["Champion"], row["Day"]] = "WO"
+# sample pivot: champion rows and date columns (Shift text)
+sample_pivot = long_df.pivot(index="Champion", columns="Date", values="Shift").reset_index()
+# put 'WO' where leave present
+for _, r in long_df.iterrows():
+    if r["Leave"]:
+        sample_pivot.loc[sample_pivot["Champion"] == r["Champion"], r["Date"]] = "WO"
 
-def to_excel_bytes(sheets: Dict[str,pd.DataFrame]) -> bytes:
+def to_excel_bytes(sheets: Dict[str, pd.DataFrame]) -> bytes:
     buf = io.BytesIO()
     with get_excel_writer(buf) as writer:
         for name, df in sheets.items():
+            # Convert date columns to strings for Excel readability
             df.to_excel(writer, sheet_name=name, index=False)
     return buf.getvalue()
 
-st.download_button("Download Roster (sample format) - Excel", to_excel_bytes({"Roster_Sample": sample_pivot}), file_name="roster_sample.xlsx")
-st.download_button("Download Full Roster (long) - CSV", full_long_df.to_csv(index=False).encode("utf-8"), file_name="roster_long.csv")
-st.download_button("Download Planner (Excel) - Roster/Leaves/Summary/SlotRequirements",
-                  to_excel_bytes({
-                      "Roster": full_long_df,
-                      "Leaves": pd.DataFrame([{"Day":d,"Champion":k,"Leave Type":v} for d in DAYS for k,v in st.session_state["leaves"].get(d,{}).items()]),
-                      "Summary": summary_df,
-                      "Slot_Requirements": slot_req_df
-                  }),
-                  file_name="roster_planner.xlsx")
+st.download_button("Download Roster (sample pivot) - Excel", to_excel_bytes({"Roster_Sample": sample_pivot}), file_name="roster_sample.xlsx")
+st.download_button("Download Roster (long) - CSV", long_df.to_csv(index=False).encode("utf-8"), file_name="roster_long.csv")
+st.download_button("Download Planner (Excel) - Roster+Summary+HourlyReq", to_excel_bytes({"Roster": long_df, "Summary": summary_df, "HourlyRequirements": req_df}), file_name="roster_planner.xlsx")
 
-# Hourly & slot view
+# Hourly view for a chosen date
 st.markdown("---")
-st.subheader("Hourly & Slot view")
-sel_day = st.selectbox("Select day for hourly/slot view", DAYS)
-# hourly aggregated required and assigned
-hourly_req = slot_req_df[slot_req_df["Day"]==sel_day].groupby(slot_req_df["Slot"]//SLOTS_PER_HOUR, as_index=False)["RequiredAgents"].max()
-hourly_req = hourly_req.rename(columns={"Slot":"Hour","RequiredAgents":"RequiredAgentsAtPeakSlot"})
-# assigned agents per hour aggregated from slots
-assigned_slots = np.zeros(24)
-cov_slots = np.zeros(SLOTS_PER_DAY, dtype=int)
-for n in champ_names:
-    info = roster[sel_day][n]
-    if info["leave"] or not info["shift"]:
-        continue
-    s = info["shift"]
-    if s.startswith("Straight"):
-        times = s.split()[1]
-        s_str,e_str = times.split("-")
-        s_slot = int(s_str.split(":")[0]) * SLOTS_PER_HOUR + (int(s_str.split(":")[1])//30)
-        e_slot = int(e_str.split(":")[0]) * SLOTS_PER_HOUR + (int(e_str.split(":")[1])//30)
-        for sl in range(s_slot,e_slot):
-            if 0<=sl<SLOTS_PER_DAY: cov_slots[sl]+=1
-    elif s.startswith("Split"):
-        parts = s.replace("Split","").strip().split("&")
-        for p in parts:
-            p = p.strip()
-            if "-" not in p: continue
-            s_str,e_str = p.split("-")
-            s_slot = int(s_str.split(":")[0]) * SLOTS_PER_HOUR + (int(s_str.split(":")[1])//30)
-            e_slot = int(e_str.split(":")[0]) * SLOTS_PER_HOUR + (int(e_str.split(":")[1])//30)
-            for sl in range(s_slot,e_slot):
-                if 0<=sl<SLOTS_PER_DAY: cov_slots[sl]+=1
-# aggregate per hour
-for h in range(24):
-    assigned_slots[h] = cov_slots[h*2:(h*2+2)].max()  # show peak slot coverage within hour
-hr_view = pd.DataFrame({"Hour": list(range(24)), "AssignedAgents": assigned_slots.astype(int)})
-# join with hourly_req (which is in hours)
-hourly_calls_view = hourly_calls_df[hourly_calls_df["Day"]==sel_day].sort_values("Hour").reset_index(drop=True)
-hourly_calls_view = hourly_calls_view.rename(columns={"Calls":"CallsInHour"})
-hourly_display = hourly_calls_view.merge(hourly_req, left_on="Hour", right_on="Hour", how="left").fillna(0)
-hourly_display = hourly_display.merge(hr_view, on="Hour", how="left")
+st.subheader("Hourly view for a selected Date")
+sel_date = st.selectbox("Select Date", unique_dates)
+hr_req = req_df[req_df["Date"] == sel_date].sort_values("Hour").reset_index(drop=True)
+# build assigned agents per hour from roster
+assigned_per_hour = np.zeros(24, dtype=int)
+for name in champ_names:
+    info = roster[sel_date][name]
+    if info["shift"] and not info["leave"]:
+        shift = info["shift"]
+        if shift.startswith("Straight"):
+            try:
+                times = shift.split()[1]
+                s,e = times.split("-")
+                s_h = int(s.split(":")[0]); e_h = int(e.split(":")[0])
+                for h in range(s_h, e_h):
+                    if 0 <= h < 24: assigned_per_hour[h] += 1
+            except Exception:
+                pass
+        elif shift.startswith("Split"):
+            try:
+                parts = shift.replace("Split","").strip().split("&")
+                for p in parts:
+                    stime, etime = p.strip().split("-")
+                    s_h = int(stime.split(":")[0]); e_h = int(etime.split(":")[0])
+                    for h in range(s_h,e_h):
+                        if 0 <= h < 24: assigned_per_hour[h] += 1
+            except Exception:
+                pass
+hourly_display = pd.DataFrame({
+    "Hour": list(range(24)),
+    "Calls": hr_req["Calls"].values,
+    "RequiredAgents": hr_req["RequiredAgents"].values,
+    "AssignedAgents": assigned_per_hour
+})
 st.dataframe(hourly_display, use_container_width=True)
 
-st.caption("End of planner. Edit roster and re-apply edits as needed. Use templates to upload data in correct format.")
+st.caption("Leave management: edit cell for date & champion in the roster above and enter 'WO' or leave text to mark leave. No separate leave template needed.")
+
+# End
