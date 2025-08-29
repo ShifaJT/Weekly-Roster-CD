@@ -6,7 +6,7 @@ import datetime as dt
 
 # ---------------- CONFIG ---------------- #
 st.set_page_config(page_title="Weekly Roster Planner", layout="wide")
-st.title("📅 Weekly Roster Planner with AL% Target")
+st.title("📅 Weekly Roster Planner with AL% Target and Leaves")
 
 # Default values
 SHIFT_PATTERNS = [
@@ -15,14 +15,16 @@ SHIFT_PATTERNS = [
     "09:00 to 18:00",
     "10:00 to 19:00",
     "11:00 to 20:00",
-    "12:00 to 21:00",
+    "12:00 to 21:00"
+]
+
+SPLIT_SHIFTS = [
     "07:00 to 11:00 & 16:30 to 21:00",
     "08:00 to 12:00 & 16:30 to 21:00",
     "09:00 to 13:00 & 16:30 to 21:00"
 ]
 
-# Active working time per shift in minutes
-ACTIVE_MINUTES = 470
+ACTIVE_MINUTES = 470  # 7h50m active
 AHT = 5  # Average Handling Time in minutes
 
 # ---------------- Sidebar Controls ---------------- #
@@ -46,22 +48,47 @@ def create_hourly_template():
     buf.seek(0)
     return buf
 
+def create_champions_template():
+    data = [
+        ["Name", "Primary_Lang", "Secondary_Langs", "Can_Split(Yes/No)"],
+        ["Revathi", "ka", "en", "No"],
+        ["Pasang", "en", "hi", "Yes"]
+    ]
+    df = pd.DataFrame(data[1:], columns=data[0])
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Champions")
+    buf.seek(0)
+    return buf
+
 st.sidebar.download_button("⬇ Download Hourly Calls Template", create_hourly_template(), file_name="hourly_calls_template.xlsx")
+st.sidebar.download_button("⬇ Download Champions Template", create_champions_template(), file_name="champions_template.xlsx")
 
 # ---------------- Upload Section ---------------- #
-st.subheader("📤 Upload Last 30 Days Hourly Calls Data")
+st.subheader("📤 Upload Required Files")
 hourly_file = st.file_uploader("Upload Hourly Calls Excel", type=["xlsx"])
+champ_file = st.file_uploader("Upload Champions Excel", type=["xlsx"])
 
-if hourly_file:
+if hourly_file and champ_file:
+    # ---------------- Calls Data ---------------- #
     calls_df = pd.read_excel(hourly_file)
     if not {"Date", "Hour", "Calls"}.issubset(calls_df.columns):
-        st.error("❌ Invalid file format. Ensure columns: Date, Hour, Calls")
+        st.error("❌ Invalid hourly file format. Ensure columns: Date, Hour, Calls")
         st.stop()
 
     calls_df["Date"] = pd.to_datetime(calls_df["Date"], errors="coerce")
 
+    # ---------------- Champions Data ---------------- #
+    champs_df = pd.read_excel(champ_file)
+    if not {"Name", "Primary_Lang", "Secondary_Langs", "Can_Split(Yes/No)"}.issubset(champs_df.columns):
+        st.error("❌ Invalid champions file format.")
+        st.stop()
+
+    champions = champs_df.to_dict("records")
+    st.write(f"✅ Loaded {len(champions)} champions")
+
     # ---------------- Forecast Next Week ---------------- #
-    st.write("✅ Uploaded Data Preview", calls_df.head())
+    st.write("✅ Uploaded Calls Data Preview", calls_df.head())
     pattern = calls_df.copy()
     pattern["Weekday"] = pattern["Date"].dt.day_name()
     weekday_pattern = pattern.groupby(["Weekday", "Hour"], as_index=False)["Calls"].mean()
@@ -85,15 +112,18 @@ if hourly_file:
     # ---------------- Calculate Daily Total ---------------- #
     daily_calls = forecast_df.groupby("Date")["Calls"].sum().reset_index().rename(columns={"Calls": "Total_Calls"})
 
-    # ---------------- Champs Data ---------------- #
-    st.subheader("👥 Champions List")
-    champions = [
-        "Revathi", "Pasang", "Kavya S", "Navya", "M Showkath Nawaz", "Alwin", "Marcelina J", "Dundesh",
-        "Binita Kongadi", "Pooja N", "Jyothika", "Sadanad", "Rakesh", "Mallikarjun Patil"
-    ]
-    st.write(f"Total Champions: {len(champions)}")
+    # ---------------- Week-Off Assignment ---------------- #
+    def assign_week_off(champ_list):
+        week_off_plan = {}
+        days = len(next_week)
+        for i, champ in enumerate(champ_list):
+            off_day = i % days
+            week_off_plan[champ["Name"]] = next_week[off_day]
+        return week_off_plan
 
-    # ---------------- Assign Shifts ---------------- #
+    week_offs = assign_week_off(champions)
+
+    # ---------------- Shift Assignment Logic ---------------- #
     def calculate_answered(champ_count):
         return (champ_count * ACTIVE_MINUTES) / AHT
 
@@ -103,7 +133,6 @@ if hourly_file:
     for idx, row in daily_calls.iterrows():
         date = row["Date"]
         total_calls = row["Total_Calls"]
-        assigned = 0
         shifts = []
         split_assigned = 0
 
@@ -112,17 +141,18 @@ if hourly_file:
             achieved_al = (answered_calls / total_calls) * 100 if total_calls > 0 else 0
             if achieved_al >= target_al or len(shifts) >= len(champions):
                 break
-            # Assign split shift if available
             if split_assigned < max_split and len(shifts) % 3 == 0:
-                shifts.append(SHIFT_PATTERNS[np.random.randint(6, 9)])
+                shifts.append(np.random.choice(SPLIT_SHIFTS))
                 split_assigned += 1
             else:
-                shifts.append(SHIFT_PATTERNS[np.random.randint(0, 6)])
+                shifts.append(np.random.choice(SHIFT_PATTERNS))
 
-        # Fill with champions
         champs_for_day = champions[:len(shifts)]
         for champ, shift in zip(champs_for_day, shifts):
-            roster_data.append({"Name": champ, "Date": date, "Shift": shift})
+            if week_offs[champ["Name"]] == date:
+                roster_data.append({"Name": champ["Name"], "Date": date, "Shift": "WO"})
+            else:
+                roster_data.append({"Name": champ["Name"], "Date": date, "Shift": shift})
 
         al_summary.append({
             "Date": date.strftime("%Y-%m-%d"),
@@ -133,10 +163,7 @@ if hourly_file:
             "Achieved AL%": round(achieved_al, 2)
         })
 
-    # Convert to DataFrame
     roster_df = pd.DataFrame(roster_data)
-
-    # Pivot to Weekly View
     pivot_roster = roster_df.pivot(index="Name", columns="Date", values="Shift").reset_index()
 
     # ---------------- Display AL Summary ---------------- #
@@ -146,23 +173,7 @@ if hourly_file:
 
     # ---------------- Display Color-coded Roster ---------------- #
     st.subheader("📅 Weekly Roster")
-    def style_roster(df):
-        styles = []
-        for col in df.columns[1:]:
-            day_styles = []
-            for val in df[col]:
-                if val is None:
-                    day_styles.append("background-color:white;")
-                elif "WO" in str(val):
-                    day_styles.append("background-color:#003366;color:white;")
-                elif "CO" in str(val):
-                    day_styles.append("background-color:yellow;")
-                elif "&" in str(val):
-                    day_styles.append("background-color:#00CED1;")
-                else:
-                    day_styles.append("background-color:#FFA500;")
-            styles.append(day_styles)
-        return styles
+    st.write("You can manually edit in Excel after download for SL/PL/CO")
 
     st.dataframe(pivot_roster)
 
