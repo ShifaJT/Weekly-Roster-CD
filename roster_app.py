@@ -327,4 +327,4 @@ for day in DAYS:
     st.dataframe(df_day)
     df_day["Day"] = day
     roster_tables.append(df_day)
-full_roster_df = pd.concat(roster_tables, ignore
+full_roster_df = pd.concat(roster_tables, ignore)
