@@ -1,9 +1,3 @@
-# Full Streamlit Roster Optimizer with:
-# - Uses champions from uploaded Excel (Roster sample.xlsx)
-# - Uses call volume data from uploaded template (call_volume_template.xlsx)
-# - Keeps your champions intact
-# - Handles AL target, leave management, split shifts, and downloadable outputs
-
 import io
 import math
 import datetime as dt
@@ -179,6 +173,36 @@ with st.sidebar:
     champ_file = st.file_uploader("Upload Champions Excel", type=["xlsx"])
     call_file = st.file_uploader("Upload Calls Excel", type=["xlsx"])
 
+# Download templates
+def create_champions_template():
+    df = pd.DataFrame({
+        "name": ["Revathi", "Anjali"],
+        "primary_lang": ["ka", "hi"],
+        "secondary_langs": ["te,hi", "ka"],
+        "calls_per_hour": [12, 11],
+        "can_split": [True, True]
+    })
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="Champions", index=False)
+    return buf.getvalue()
+
+def create_calls_template():
+    daily = pd.DataFrame({"Day": DAYS, "Calls": [2000, 1800, 2200, 2100, 2300, 2400, 2000]})
+    hourly = []
+    for d in DAYS:
+        for h in range(24):
+            hourly.append({"Day": d, "Hour": h, "Calls": 100})
+    hourly_df = pd.DataFrame(hourly)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        daily.to_excel(writer, sheet_name="Daily_Data", index=False)
+        hourly_df.to_excel(writer, sheet_name="Hourly_Data", index=False)
+    return buf.getvalue()
+
+st.sidebar.download_button("Download Champions Template", create_champions_template(), file_name="champions_template.xlsx")
+st.sidebar.download_button("Download Calls Template", create_calls_template(), file_name="calls_template.xlsx")
+
 # Load champions
 def load_champions_from_excel(file) -> pd.DataFrame:
     xls = pd.ExcelFile(file)
@@ -234,6 +258,37 @@ for d in DAYS:
 leave_df = pd.DataFrame(leave_rows)
 st.dataframe(leave_df)
 
+# Download leave status
+def create_leave_status_file():
+    rows = []
+    for d in DAYS:
+        for nm in champ_df["name"].tolist():
+            status = "Active"
+            lt = ""
+            if nm in st.session_state.leaves[d]:
+                status = "On Leave"
+                lt = st.session_state.leaves[d][nm]
+            rows.append({"Day": d, "Champion": nm, "Status": status, "Leave Type": lt})
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="Leave_Status", index=False)
+    return buf.getvalue()
+
+st.download_button("Download Leave Status Template", create_leave_status_file(), file_name="leave_status.xlsx")
+
+# Upload leave status update
+uploaded_leave_file = st.file_uploader("Upload Updated Leave Status", type=["xlsx"])
+if uploaded_leave_file:
+    leave_update_df = pd.read_excel(uploaded_leave_file)
+    for _, r in leave_update_df.iterrows():
+        day, champ, lt = r["Day"], r["Champion"], r.get("Leave Type", "")
+        if day in st.session_state.leaves and champ in champ_df["name"].tolist():
+            if pd.notnull(lt) and lt != "":
+                st.session_state.leaves[day][champ] = lt
+            elif champ in st.session_state.leaves[day]:
+                del st.session_state.leaves[day][champ]
+
 # Build roster
 champ_names = champ_df["name"].tolist()
 roster = empty_roster(champ_names)
@@ -272,16 +327,4 @@ for day in DAYS:
     st.dataframe(df_day)
     df_day["Day"] = day
     roster_tables.append(df_day)
-full_roster_df = pd.concat(roster_tables, ignore_index=True)
-
-# Download buttons
-
-def to_excel_bytes(df_map: Dict[str, pd.DataFrame]) -> bytes:
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
-        for sheet, df in df_map.items():
-            df.to_excel(writer, sheet_name=sheet, index=False)
-    return buf.getvalue()
-excel_bytes = to_excel_bytes({"Roster": full_roster_df, "Leaves": leave_df, "Summary": summary_df, "Hourly_Requirements": req_df})
-
-st.download_button("Download Roster Excel", data=excel_bytes, file_name="roster_planner.xlsx")
+full_roster_df = pd.concat(roster_tables, ignore
