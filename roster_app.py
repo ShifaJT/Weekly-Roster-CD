@@ -42,11 +42,20 @@ def create_champions_template():
 
 def create_hourly_calls_template():
     buf = io.BytesIO()
-    df = pd.DataFrame({
-        "Date": ["2025-08-01", "2025-08-01", "2025-08-01", "2025-08-01"],
-        "Hour": [7, 8, 9, 10],
-        "Calls": [38, 109, 184, 278]
-    })
+    today = datetime.today()
+    start_date = today - timedelta(days=29)  # Last 30 days
+    dates = [start_date + timedelta(days=i) for i in range(30)]
+    
+    data = []
+    for d in dates:
+        for hour in OPERATING_HOURS:
+            data.append({
+                "Date": d.strftime("%Y-%m-%d"),
+                "Hour": hour,
+                "Calls": ""
+            })
+    
+    df = pd.DataFrame(data)
     with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name="Hourly_Data")
     buf.seek(0)
@@ -148,7 +157,7 @@ with st.sidebar:
     
     st.subheader("⬇ Download Templates")
     st.download_button("Download Champions Template", create_champions_template(), file_name="champions_template.xlsx")
-    st.download_button("Download Hourly Calls Template", create_hourly_calls_template(), file_name="hourly_calls_template.xlsx")
+    st.download_button("Download Hourly Calls Template (Last 30 Days Prefilled)", create_hourly_calls_template(), file_name="hourly_calls_template.xlsx")
 
 if champions_file and calls_file:
     champions_df = pd.read_excel(champions_file)
