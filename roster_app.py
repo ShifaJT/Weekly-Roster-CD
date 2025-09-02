@@ -467,10 +467,19 @@ class CallCenterRosterOptimizer:
         daily_roster = []
 
         # Straight shifts (9 hours continuous)
-        straight_start_times = [7, 8, 9, 10]
+        straight_start_times = [7, 8, 9, 10, 11]
+        straight_counts = [4, 4, 4, 3, 3]  # Distribution for 18 straight shifts
 
+        straight_idx = 0
         for i, champ in enumerate(champions[:straight_shifts]):
-            start_time = straight_start_times[i % len(straight_start_times)]
+            # Get the next available start time based on our distribution
+            while straight_counts[straight_idx % len(straight_counts)] <= 0:
+                straight_idx += 1
+                
+            start_time = straight_start_times[straight_idx % len(straight_start_times)]
+            straight_counts[straight_idx % len(straight_counts)] -= 1
+            straight_idx += 1
+            
             end_time = start_time + 9
 
             daily_roster.append({
@@ -486,23 +495,22 @@ class CallCenterRosterOptimizer:
                 'Can Split': 'Yes' if champ['can_split'] else 'No'
             })
 
-        # Split shifts with specific requirements
+        # Split shifts with specific requirements - only 5 champions
         split_champs = champions[straight_shifts:straight_shifts + split_shifts]
+        
+        # Pre-select the best 5 split shift champions based on capacity and language skills
+        if len(split_champs) > 5:
+            # Sort by capacity and select top 5
+            split_champs = sorted(split_champs, key=lambda x: x['calls_per_hour'], reverse=True)[:5]
 
-        # Apply specific shift requirements
+        # Apply specific shift requirements for the 5 split shifts
         for i, champ in enumerate(split_champs):
-            if i == 0:  # First split shift: 7-12 & 4-9
+            if i < 2:  # First 2 split shifts: 7-12 & 4-9 (covers morning peak and evening spike)
                 pattern = self.split_shift_patterns[0]
-            elif i == 1:  # Second split shift: 8-1 & 5-9
-                pattern = self.split_shift_patterns[1]
-            elif i == 2:  # Third split shift: 10-3 & 5-9
+            elif i < 4:  # Next 2 split shifts: 10-3 & 5-9 (covers late morning and evening)
                 pattern = self.split_shift_patterns[2]
-            elif i == 3:  # Fourth split shift: 12-9
+            else:  # Last split shift: 12-9 (covers afternoon through evening peak)
                 pattern = self.split_shift_patterns[3]
-            elif i == 4:  # Fifth split shift: 11-8
-                pattern = self.split_shift_patterns[4]
-            else:  # Default to first pattern if more than 5 split shifts
-                pattern = self.split_shift_patterns[0]
 
             daily_roster.append({
                 'Day': day,
@@ -739,11 +747,12 @@ class CallCenterRosterOptimizer:
 
     def apply_special_rules(self, roster_df):
         """Apply special rules like Revathi always on split shift"""
+        # Ensure Revathi is always on split shift
         revathi_mask = roster_df['Champion'] == 'Revathi'
         roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
 
         for idx in roster_df[revathi_mask].index:
-            pattern = self.split_shift_patterns[0]
+            pattern = self.split_shift_patterns[0]  # 7-12 & 4-9 pattern
             roster_df.at[idx, 'Start Time'] = pattern['display']
             roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
             roster_df.at[idx, 'Duration'] = '9 hours (with break)'
@@ -903,14 +912,39 @@ class CallCenterRosterOptimizer:
 
         return validation_results
 
+# Initialize session state
+def initialize_session_state():
+    if 'manual_splits' not in st.session_state:
+        st.session_state.manual_splits = []
+    if 'analysis_data' not in st.session_state:
+        st.session_state.analysis_data = None
+    if 'roster_df' not in st.session_state:
+        st.session_state.roster_df = None
+    if 'week_offs' not in st.session_state:
+        st.session_state.week_offs = None
+    if 'metrics' not in st.session_state:
+        st.session_state.metrics = None
+    if 'answer_rate' not in st.session_state:
+        st.session_state.answer_rate = None
+    if 'daily_rates' not in st.session_state:
+        st.session_state.daily_rates = None
+    if 'hourly_al_results' not in st.session_state:
+        st.session_state.hourly_al_results = None
+    if 'late_hour_coverage' not in st.session_state:
+        st.session_state.late_hour_coverage = None
+    if 'formatted_roster' not in st.session_state:
+        st.session_state.formatted_roster = None
+    if 'active_split_champs' not in st.session_state:
+        st.session_state.active_split_champs = 4
+
 # Main application
 def main():
     st.markdown('<h1 class="main-header">📞 Call Center Roster Optimizer</h1>', unsafe_allow_html=True)
-
+    
+    # Initialize session state
+    initialize_session_state()
+    
     optimizer = CallCenterRosterOptimizer()
-
-    if 'manual_splits' not in st.session_state:
-        st.session_state.manual_splits = []
 
     # Sidebar configuration
     with st.sidebar:
@@ -948,7 +982,7 @@ def main():
             "Minimum Active Split Shift Champions per Day",
             min_value=4,
             max_value=split_shifts,
-            value=min(5, split_shifts),
+            value=min(4, split_shifts),  # Set to 4 to ensure coverage when one is off
             help="Set the minimum number of split shift champions that must be active each day"
         )
 
@@ -995,7 +1029,7 @@ def main():
         st.markdown('<div class="split-shift-option">', unsafe_allow_html=True)
         st.subheader("Assign Specific Split Shifts")
 
-        available_champs = [champ["name"] for champ in optimizer.champions]
+        available_champs = [champ["name"] for champ in optimizer.champions if champ["can_split"]]
         selected_champ = st.selectbox("Select Champion", available_champs)
 
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -1073,10 +1107,10 @@ def main():
                     18: 224.9, 19: 179.3, 20: 113.9, 21: 0
                 },
                 'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': 17500 / 7
+                'total_daily_calls': 2975
             }
-            st.metric("Estimated Daily Calls", f"{17500 / 7:,.0f}")
-            st.metric("Estimated Weekly Calls", "17,500")
+            st.metric("Estimated Daily Calls", f"{2975:,.0f}")
+            st.metric("Estimated Weekly Calls", "20,825")
 
     with col2:
         st.header("🎯 Generate Roster")
@@ -1214,6 +1248,23 @@ def main():
             use_container_width=True,
             hide_index=True
         )
+
+        # Late hour coverage analysis
+        st.markdown('<div class="section-header"><h2>🌙 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
+        
+        if 'late_hour_coverage' in st.session_state:
+            late_coverage_df = pd.DataFrame.from_dict(st.session_state.late_hour_coverage, orient='index')
+            late_coverage_df = late_coverage_df.reset_index()
+            late_coverage_df.columns = ['Day', 'Mid Shift', 'Split Shift', 'Total']
+            
+            st.dataframe(late_coverage_df, use_container_width=True, hide_index=True)
+            
+            # Check if we meet the minimum requirement of 3 mid-shift + 3 split-shift agents
+            for day, coverage in st.session_state.late_hour_coverage.items():
+                if coverage['mid_shift'] < 3 or coverage['split_shift'] < 3:
+                    st.warning(f"⚠️ {day}: Late hour coverage is below recommended minimum (3 mid-shift + 3 split-shift)")
+                else:
+                    st.success(f"✅ {day}: Late hour coverage meets recommendations")
 
         # Manual editing option
         st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
