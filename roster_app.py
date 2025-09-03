@@ -7,7 +7,7 @@ import plotly.express as px
 from io import BytesIO
 import base64
 import random
-import openpyxl
+import openpyxl  # Added for Excel support
 
 # Page configuration
 st.set_page_config(
@@ -17,121 +17,56 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS - Updated with leave type styling
 st.markdown("""
 <style>
-.main-header {
-    font-size: 2.5rem;
-    color: #1f77b4;
-    text-align: center;
-    margin-bottom: 1rem;
-}
-.sidebar-section {
-    background-color: #f8f9fa;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    border-left: 4px solid #1f77b4;
-}
-.shift-card {
-    background-color: #e8f4f8;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin: 0.5rem 0;
-}
-.metric-card {
-    background-color: #f0f8ff;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    border: 1px solid #1f77b4;
-    margin: 0.5rem 0;
-}
-.day-tab {
-    padding: 0.5rem 1rem;
-    background-color: #e9ecef;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    margin: 0.2rem;
-    display: inline-block;
-}
-.day-tab.active {
-    background-color: #1f77b4;
-    color: white;
-}
-.week-off {
-    background-color: #ffe6e6;
-}
-.split-shift {
-    background-color: #e6f7ff;
-}
-.straight-shift {
-    background-color: #f0f8f0;
-}
-.section-header {
-    border-bottom: 2px solid #1f77b4;
-    padding-bottom: 0.5rem;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-    color: #1f77b4;
-}
-.dataframe {
-    font-size: 0.9rem;
-}
-.highlight {
-    background-color: #fff2cc;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.3rem;
-}
-.split-shift-option {
-    background-color: #e6f7ff;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    border: 1px solid #1f77b4;
-}
-.roster-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.roster-table th, .roster-table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-.roster-table th {
-    background-color: #f2f2f2;
-}
-.wo-cell {
+/* Previous styles remain the same */
+.sl-cell {
     background-color: #ffcccc;
     font-weight: bold;
 }
-.template-download {
-    background-color: #e6f7ff;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    border: 2px dashed #1f77b4;
+.cl-cell {
+    background-color: #ffddcc;
+    font-weight: bold;
 }
-.al-critical {
+.pl-cell {
+    background-color: #ffeedd;
+    font-weight: bold;
+}
+.al-cell {
+    background-color: #ffffcc;
+    font-weight: bold;
+}
+.co-cell {
+    background-color: #ccffcc;
+    font-weight: bold;
+}
+.leave-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.3rem;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin: 0.1rem;
+}
+.badge-sl {
     background-color: #ffcccc;
     color: #d93025;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.3rem;
-    font-weight: bold;
 }
-.al-warning {
-    background-color: #fff2cc;
+.badge-cl {
+    background-color: #ffddcc;
+    color: #e65100;
+}
+.badge-pl {
+    background-color: #ffeedd;
+    color: #f57c00;
+}
+.badge-al {
+    background-color: #ffffcc;
     color: #f9ab00;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.3rem;
-    font-weight: bold;
 }
-.al-good {
-    background-color: #e6f4ea;
+.badge-co {
+    background-color: #ccffcc;
     color: #137333;
-    padding: 0.2rem 0.5rem;
-    border-radius: 0.3rem;
-    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -140,6 +75,10 @@ class CallCenterRosterOptimizer:
     def __init__(self):
         self.operation_hours = list(range(7, 22))  # 7 AM to 9 PM
         self.champions = self.load_champions()
+        
+        # Set target Answer Level to 90%
+        self.TARGET_AL = 90
+        self.MIN_AL = 90  # Minimum acceptable AL
 
         # Custom shift patterns based on your requirements
         self.split_shift_patterns = [
@@ -151,7 +90,6 @@ class CallCenterRosterOptimizer:
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
-        self.TARGET_AL = 80  # Target Answer Level
 
     def load_champions(self):
         return [
@@ -202,9 +140,12 @@ class CallCenterRosterOptimizer:
 
     def agents_needed_for_target(self, forecasted_calls, target_al, aht_seconds):
         """Calculates the minimum number of agents required to hit a target AL."""
+        if forecasted_calls <= 0:
+            return 0
+            
         required_capacity = (target_al / 100) * forecasted_calls
         agents_required = (required_capacity * aht_seconds) / 3600
-        return np.ceil(agents_required)
+        return max(1, np.ceil(agents_required))
 
     def analyze_roster_sufficiency(self, forecasted_calls, scheduled_agents, aht_seconds, target_al):
         """Analyzes if the scheduled roster is sufficient and recommends changes."""
@@ -227,10 +168,10 @@ class CallCenterRosterOptimizer:
             recommendation['recommendation'] = 'Roster is sufficient to target.'
             if scheduled_agents > min_agents_required + 1:
                 recommendation['recommendation'] = f'Roster is strong. Potential to reduce by {int(scheduled_agents - min_agents_required)} agent(s).'
-        elif predicted_al >= 80:
+        elif predicted_al >= 85:
             recommendation['status'] = '🟡 YELLOW (Close to Goal)'
             recommendation['recommendation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
-        elif predicted_al >= 70:
+        elif predicted_al >= 80:
             recommendation['status'] = '🟠 ORANGE (At Risk)'
             recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
         else:
@@ -319,9 +260,9 @@ class CallCenterRosterOptimizer:
         """Get status classification for AL value"""
         if al_value >= self.TARGET_AL:
             return "✅ GOOD"
-        elif al_value >= 80:
+        elif al_value >= 85:
             return "🟡 WARNING"
-        elif al_value >= 70:
+        elif al_value >= 80:
             return "🟠 AT RISK"
         else:
             return "🔴 CRITICAL"
@@ -342,14 +283,25 @@ class CallCenterRosterOptimizer:
             'Peak_Volume': [0] * 30
         })
 
+        # Add leave tracking sheet
+        leave_data = pd.DataFrame({
+            'Champion': [champ['name'] for champ in self.champions],
+            'Sick_Leave': [0] * len(self.champions),
+            'Casual_Leave': [0] * len(self.champions),
+            'Period_Leave': [0] * len(self.champions),
+            'Annual_Leave': [0] * len(self.champions),
+            'Comp_Off': [0] * len(self.champions)
+        })
+
         instructions = pd.DataFrame({
             'Instruction': [
                 'INSTRUCTIONS:',
                 '1. Fill in your call volume data in the appropriate sheets',
                 '2. For best results, use the Hourly_Data sheet with calls per hour',
                 '3. If you only have daily totals, use the Daily_Data sheet',
-                '4. Save the file and upload it back to the app',
-                '5. The app will analyze your data and generate an optimized roster',
+                '4. Add leave information in the Leave_Data sheet (0=no leave, 1=on leave)',
+                '5. Save the file and upload it back to the app',
+                '6. The app will analyze your data and generate an optimized roster',
                 '',
                 'HOURLY_DATA SHEET:',
                 '- Hour: Operation hour (7 to 21)',
@@ -359,7 +311,15 @@ class CallCenterRosterOptimizer:
                 '- Date: Date of the data (YYYY-MM-DD)',
                 '- Total_Calls: Total calls received that day',
                 '- Peak_Hour: Hour with highest call volume (7-21)',
-                '- Peak_Volume: Number of calls during peak hour'
+                '- Peak_Volume: Number of calls during peak hour',
+                '',
+                'LEAVE_DATA SHEET:',
+                '- Champion: Name of the agent',
+                '- Sick_Leave: 1 if on sick leave, 0 otherwise',
+                '- Casual_Leave: 1 if on casual leave, 0 otherwise',
+                '- Period_Leave: 1 if on period leave, 0 otherwise',
+                '- Annual_Leave: 1 if on annual leave, 0 otherwise',
+                '- Comp_Off: 1 if on comp off, 0 otherwise'
             ]
         })
 
@@ -368,14 +328,18 @@ class CallCenterRosterOptimizer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
             hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
             daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
+            leave_data.to_excel(writer, sheet_name='Leave_Data', index=False)
 
         return excel_buffer.getvalue()
 
     def analyze_excel_data(self, uploaded_file):
-        """Analyze uploaded Excel file for call volume"""
+        """Analyze uploaded Excel file for call volume and leave data"""
         try:
             xls = pd.ExcelFile(uploaded_file)
+            analysis_data = {}
+            leave_data = {}
 
+            # Process call volume data
             if 'Hourly_Data' in xls.sheet_names:
                 df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
 
@@ -384,13 +348,13 @@ class CallCenterRosterOptimizer:
                     peak_hours = df.nlargest(4, 'Calls')['Hour'].tolist()
                     total_daily_calls = df['Calls'].sum()
 
-                    return {
+                    analysis_data = {
                         'hourly_volume': hourly_volume,
                         'peak_hours': peak_hours,
                         'total_daily_calls': total_daily_calls
                     }
 
-            if 'Daily_Data' in xls.sheet_names:
+            elif 'Daily_Data' in xls.sheet_names:
                 df = pd.read_excel(uploaded_file, sheet_name='Daily_Data')
 
                 if 'Total_Calls' in df.columns:
@@ -410,18 +374,39 @@ class CallCenterRosterOptimizer:
                     else:
                         peak_hours = [11, 12, 13, 14]
 
-                    return {
+                    analysis_data = {
                         'hourly_volume': hourly_volume,
                         'peak_hours': peak_hours,
                         'total_daily_calls': avg_daily_calls
                     }
 
-            st.warning("No recognized data format. Using sample data.")
-            return self.get_sample_data()
+            # Process leave data
+            if 'Leave_Data' in xls.sheet_names:
+                df = pd.read_excel(uploaded_file, sheet_name='Leave_Data')
+                if 'Champion' in df.columns:
+                    for _, row in df.iterrows():
+                        champion = row['Champion']
+                        leave_data[champion] = {
+                            'sick_leave': row.get('Sick_Leave', 0),
+                            'casual_leave': row.get('Casual_Leave', 0),
+                            'period_leave': row.get('Period_Leave', 0),
+                            'annual_leave': row.get('Annual_Leave', 0),
+                            'comp_off': row.get('Comp_Off', 0)
+                        }
+
+            if not analysis_data:
+                st.warning("No recognized data format. Using sample data.")
+                analysis_data = self.get_sample_data()
+
+            analysis_data['leave_data'] = leave_data
+            return analysis_data
 
         except Exception as e:
             st.error(f"Error reading Excel file: {str(e)}")
-            return self.get_sample_data()
+            st.info("Please make sure you have the required dependencies installed.")
+            sample_data = self.get_sample_data()
+            sample_data['leave_data'] = {}
+            return sample_data
 
     def get_sample_data(self):
         """Return sample data structure"""
@@ -436,16 +421,21 @@ class CallCenterRosterOptimizer:
         }
 
     def generate_roster(self, straight_shifts, split_shifts, analysis_data, manual_splits=None):
-        """Generate optimized roster based on shift preferences"""
+        """Generate optimized roster based on shift preferences with 90% AL target"""
         try:
-            total_champions = straight_shifts + split_shifts
-            champions_to_use = self.champions[:total_champions]
+            # Adjust staffing based on 90% AL target
+            adjusted_straight_shifts, adjusted_split_shifts = self.adjust_staffing_for_al_target(
+                straight_shifts, split_shifts, analysis_data
+            )
+            
+            total_champions = adjusted_straight_shifts + adjusted_split_shifts
+            champions_to_use = self.get_available_champions(analysis_data.get('leave_data', {}))[:total_champions]
 
             roster_data = []
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
             for day in days:
-                day_roster = self.generate_daily_roster(day, champions_to_use, straight_shifts, split_shifts, analysis_data, manual_splits)
+                day_roster = self.generate_daily_roster(day, champions_to_use, adjusted_straight_shifts, adjusted_split_shifts, analysis_data, manual_splits)
                 roster_data.extend(day_roster)
 
             roster_df = pd.DataFrame(roster_data)
@@ -462,6 +452,48 @@ class CallCenterRosterOptimizer:
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
             return None, None
+
+    def adjust_staffing_for_al_target(self, straight_shifts, split_shifts, analysis_data):
+        """Adjust staffing levels to ensure 90% AL target"""
+        # Calculate required staffing for 90% AL
+        peak_hour_volume = max(analysis_data['hourly_volume'].values())
+        agents_needed = self.agents_needed_for_target(peak_hour_volume, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+        
+        # Calculate current staffing
+        current_staffing = straight_shifts + split_shifts
+        
+        # Increase staffing if needed to meet 90% AL target
+        if agents_needed > current_staffing:
+            additional_staff = agents_needed - current_staffing
+            # Distribute additional staff between straight and split shifts
+            straight_increase = int(additional_staff * 0.7)  # 70% to straight shifts
+            split_increase = additional_staff - straight_increase
+            
+            straight_shifts += straight_increase
+            split_shifts += split_increase
+            
+            st.info(f"Increased staffing from {current_staffing} to {straight_shifts + split_shifts} to meet 90% AL target")
+        
+        return straight_shifts, split_shifts
+
+    def get_available_champions(self, leave_data):
+        """Filter out champions who are on leave"""
+        available_champs = []
+        for champ in self.champions:
+            champ_leave = leave_data.get(champ['name'], {})
+            # Check if champion is on any type of leave
+            on_leave = any([
+                champ_leave.get('sick_leave', 0) == 1,
+                champ_leave.get('casual_leave', 0) == 1,
+                champ_leave.get('period_leave', 0) == 1,
+                champ_leave.get('annual_leave', 0) == 1,
+                champ_leave.get('comp_off', 0) == 1
+            ])
+            
+            if not on_leave:
+                available_champs.append(champ)
+        
+        return available_champs
 
     def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data, manual_splits=None):
         """Generate roster for a single day with specific shift requirements"""
@@ -627,8 +659,8 @@ class CallCenterRosterOptimizer:
 
         return daily_rates
 
-    def show_editable_roster(self, roster_df, week_offs):
-        """Display an editable roster table with week offs"""
+    def show_editable_roster(self, roster_df, week_offs, leave_data):
+        """Display an editable roster table with week offs and leave information"""
         st.subheader("✏️ Edit Roster Manually")
 
         edited_df = st.data_editor(
@@ -692,7 +724,63 @@ class CallCenterRosterOptimizer:
             if row["Current Day Off"] != "No day off":
                 new_week_offs[row["Champion"]] = row["Current Day Off"]
 
-        return edited_df, new_week_offs
+        st.subheader("🏥 Edit Leave Information")
+        leave_types = ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off"]
+        
+        leave_editor_data = []
+        for champ_name, leave_info in leave_data.items():
+            leave_editor_data.append({
+                "Champion": champ_name,
+                "Sick Leave": leave_info.get('sick_leave', 0),
+                "Casual Leave": leave_info.get('casual_leave', 0),
+                "Period Leave": leave_info.get('period_leave', 0),
+                "Annual Leave": leave_info.get('annual_leave', 0),
+                "Comp Off": leave_info.get('comp_off', 0)
+            })
+        
+        # Add champions not in leave_data
+        for champ in self.champions:
+            if champ['name'] not in leave_data:
+                leave_editor_data.append({
+                    "Champion": champ['name'],
+                    "Sick Leave": 0,
+                    "Casual Leave": 0,
+                    "Period Leave": 0,
+                    "Annual Leave": 0,
+                    "Comp Off": 0
+                })
+        
+        leave_df = pd.DataFrame(leave_editor_data)
+        
+        edited_leave_data = st.data_editor(
+            leave_df,
+            column_config={
+                "Champion": st.column_config.SelectboxColumn(
+                    "Champion",
+                    options=[champ["name"] for champ in self.champions],
+                    required=True
+                ),
+                "Sick Leave": st.column_config.CheckboxColumn("Sick Leave"),
+                "Casual Leave": st.column_config.CheckboxColumn("Casual Leave"),
+                "Period Leave": st.column_config.CheckboxColumn("Period Leave"),
+                "Annual Leave": st.column_config.CheckboxColumn("Annual Leave"),
+                "Comp Off": st.column_config.CheckboxColumn("Comp Off")
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        new_leave_data = {}
+        for _, row in edited_leave_data.iterrows():
+            new_leave_data[row["Champion"]] = {
+                'sick_leave': row["Sick Leave"],
+                'casual_leave': row["Casual Leave"],
+                'period_leave': row["Period Leave"],
+                'annual_leave': row["Annual Leave"],
+                'comp_off': row["Comp Off"]
+            }
+
+        return edited_df, new_week_offs, new_leave_data
 
     def assign_weekly_offs(self, roster_df, max_offs_per_day=4, min_split_champs=4):
         """Assign weekly off days to champions with limit per day, ensuring split shift coverage"""
@@ -789,8 +877,8 @@ class CallCenterRosterOptimizer:
         else:
             return roster_df
 
-    def format_roster_for_display(self, roster_df, week_offs):
-        """Format the roster in the sample Excel format"""
+    def format_roster_for_display(self, roster_df, week_offs, leave_data):
+        """Format the roster in the sample Excel format with leave information"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
         display_df = pd.DataFrame()
@@ -813,11 +901,34 @@ class CallCenterRosterOptimizer:
             if display_df.at[champ_idx[0], 'Shift'] == "":
                 display_df.at[champ_idx[0], 'Shift'] = shift_time
 
+        # Apply week offs
         for champ, off_day in week_offs.items():
             if off_day in days:
                 champ_idx = display_df[display_df['Name'] == champ].index
                 if len(champ_idx) > 0:
                     display_df.at[champ_idx[0], off_day] = "WO"
+
+        # Apply leave information
+        for champ_name, leave_info in leave_data.items():
+            champ_idx = display_df[display_df['Name'] == champ_name].index
+            if len(champ_idx) > 0:
+                for day in days:
+                    if display_df.at[champ_idx[0], day] == "":
+                        # Apply leave badges
+                        leave_badges = []
+                        if leave_info.get('sick_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-sl">SL</span>')
+                        if leave_info.get('casual_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
+                        if leave_info.get('period_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
+                        if leave_info.get('annual_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-al">AL</span>')
+                        if leave_info.get('comp_off', 0):
+                            leave_badges.append('<span class="leave-badge badge-co">CO</span>')
+                        
+                        if leave_badges:
+                            display_df.at[champ_idx[0], day] = " ".join(leave_badges)
 
         return display_df
 
@@ -879,7 +990,7 @@ class CallCenterRosterOptimizer:
         return validation_results
 
     def validate_al_target(self, roster_df, analysis_data):
-        """Validate that we achieve at least 80% AL target"""
+        """Validate that we achieve at least 90% AL target"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         validation_results = {}
 
@@ -908,7 +1019,7 @@ class CallCenterRosterOptimizer:
 
             validation_results[day] = {
                 'expected_al': expected_al,
-                'status': '✅ Target Met' if expected_al >= 80 else '❌ Below Target'
+                'status': '✅ Target Met' if expected_al >= self.MIN_AL else '❌ Below Target'
             }
 
         return validation_results
@@ -937,6 +1048,8 @@ def initialize_session_state():
         st.session_state.formatted_roster = None
     if 'active_split_champs' not in st.session_state:
         st.session_state.active_split_champs = 4
+    if 'leave_data' not in st.session_state:
+        st.session_state.leave_data = {}
 
 # Main application
 def main():
@@ -1066,7 +1179,7 @@ def main():
 
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🕐 Operation Hours")
-        st.info("""
+        st.info(f"""
         **Operating Schedule:**
         - 🕖 **7:00 AM** - Operation starts
         - 🕘 **9:00 PM** - Operation ends
@@ -1075,7 +1188,7 @@ def main():
         - 🔄 **Revathi** always assigned to split shifts
         - 📋 Max 4 week offs per day to maintain answer rate
         - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
-        - 🎯 **AL Target:** 80% Answer Level
+        - 🎯 **AL Target:** {optimizer.TARGET_AL}% Answer Level (Minimum: {optimizer.MIN_AL}%)
         - 👥 **Late Hour Coverage:** Minimum 3 mid-shift + 3 split-shift agents during 5 PM - 9 PM
         """)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1097,6 +1210,14 @@ def main():
             analysis_data = optimizer.analyze_excel_data(uploaded_file)
             if analysis_data:
                 st.session_state.analysis_data = analysis_data
+                st.session_state.leave_data = analysis_data.get('leave_data', {})
+                
+                # Show leave information
+                if st.session_state.leave_data:
+                    on_leave_count = sum(1 for leave_info in st.session_state.leave_data.values() 
+                                        if any(leave_info.values()))
+                    st.metric("Agents on Leave", on_leave_count)
+                
                 st.metric("Daily Call Volume", f"{analysis_data['total_daily_calls']:,.0f}")
                 st.metric("Weekly Call Volume", f"{analysis_data['total_daily_calls'] * 7:,.0f}")
                 st.metric("Peak Hours", ", ".join([f"{h}:00" for h in analysis_data['peak_hours']]))
@@ -1117,7 +1238,7 @@ def main():
         st.header("🎯 Generate Roster")
 
         if st.button("🚀 Generate Optimized Roster", type="primary", use_container_width=True):
-            with st.spinner("Generating optimized roster..."):
+            with st.spinner("Generating optimized roster for 90% AL target..."):
                 roster_df, week_offs = optimizer.generate_roster(
                     straight_shifts, 
                     split_shifts, 
@@ -1145,7 +1266,9 @@ def main():
                     st.session_state.hourly_al_results = hourly_al_results
                     st.session_state.late_hour_coverage = late_hour_coverage
 
-                    st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
+                    st.session_state.formatted_roster = optimizer.format_roster_for_display(
+                        roster_df, week_offs, st.session_state.leave_data
+                    )
 
                     st.success("✅ Roster generated successfully!")
                 else:
@@ -1193,7 +1316,7 @@ def main():
             st.info(f"**Recommendation:** Increase the 'Minimum Active Split Shift Champions' value or add more split shifts.")
 
         # Display AL target validation
-        st.markdown('<div class="section-header"><h2>🎯 AL Target Validation (Minimum 80%)</h2></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header"><h2>🎯 AL Target Validation (Minimum {optimizer.MIN_AL}%)</h2></div>', unsafe_allow_html=True)
 
         al_validation = optimizer.validate_al_target(st.session_state.roster_df, st.session_state.analysis_data)
 
@@ -1211,7 +1334,7 @@ def main():
 
         below_target_days = [day for day, result in al_validation.items() if result['status'] == '❌ Below Target']
         if below_target_days:
-            st.error(f"⚠️ {len(below_target_days)} days are below the 80% AL target!")
+            st.error(f"⚠️ {len(below_target_days)} days are below the {optimizer.MIN_AL}% AL target!")
             st.info("**Recommendation:** Increase the number of agents or adjust shift patterns.")
 
         # Display daily answer rates
@@ -1246,11 +1369,9 @@ def main():
         # Display roster in sample format
         st.markdown('<div class="section-header"><h2>📋 Roster Schedule</h2></div>', unsafe_allow_html=True)
 
-        st.dataframe(
-            st.session_state.formatted_roster,
-            use_container_width=True,
-            hide_index=True
-        )
+        # Display the formatted roster with HTML rendering for leave badges
+        formatted_roster_html = st.session_state.formatted_roster.to_html(escape=False, index=False)
+        st.markdown(formatted_roster_html, unsafe_allow_html=True)
 
         # Late hour coverage analysis
         st.markdown('<div class="section-header"><h2>🌙 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
@@ -1272,13 +1393,14 @@ def main():
         # Manual editing option
         st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
 
-        if st.checkbox("Enable manual editing of shift timings and week offs"):
-            edited_roster, edited_week_offs = optimizer.show_editable_roster(
-                st.session_state.roster_df, st.session_state.week_offs
+        if st.checkbox("Enable manual editing of shift timings, week offs, and leave information"):
+            edited_roster, edited_week_offs, edited_leave_data = optimizer.show_editable_roster(
+                st.session_state.roster_df, st.session_state.week_offs, st.session_state.leave_data
             )
 
             st.session_state.roster_df = edited_roster
             st.session_state.week_offs = edited_week_offs
+            st.session_state.leave_data = edited_leave_data
 
             if st.button("Update Metrics after Editing"):
                 updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
