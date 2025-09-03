@@ -8,3 +8,6 @@ streamlit
 pandas
 numpy
 xlsxwriter
+git add requirements.txt
+git commit -m "Add pulp to requirements"
+git push origin main
