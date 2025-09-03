@@ -165,7 +165,7 @@ class CallCenterRosterOptimizer:
             {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True},
             {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False},
             {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False},
+            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False},
             {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True},
             {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False},
             {"name": "Divya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": True},
@@ -1147,12 +1147,14 @@ def main():
                     st.session_state.formatted_roster = optimizer.format_roster_for_display(roster_df, week_offs)
 
                     st.success("✅ Roster generated successfully!")
+                else:
+                    st.error("❌ Failed to generate roster. Please check your settings.")
 
         elif 'roster_df' in st.session_state:
             st.info("📋 Previously generated roster is available. Click the button to generate a new one.")
 
     # Display results if available
-    if 'roster_df' in st.session_state and 'metrics' in st.session_state:
+    if 'roster_df' in st.session_state and 'metrics' in st.session_state and st.session_state.metrics is not None:
         st.markdown("---")
         st.markdown('<div class="section-header"><h2>📊 Performance Metrics</h2></div>', unsafe_allow_html=True)
 
@@ -1252,7 +1254,7 @@ def main():
         # Late hour coverage analysis
         st.markdown('<div class="section-header"><h2>🌙 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
         
-        if 'late_hour_coverage' in st.session_state:
+        if 'late_hour_coverage' in st.session_state and st.session_state.late_hour_coverage is not None:
             late_coverage_df = pd.DataFrame.from_dict(st.session_state.late_hour_coverage, orient='index')
             late_coverage_df = late_coverage_df.reset_index()
             late_coverage_df.columns = ['Day', 'Mid Shift', 'Split Shift', 'Total']
@@ -1284,45 +1286,51 @@ def main():
                 updated_hourly_al = optimizer.calculate_hourly_al_analysis(edited_roster, st.session_state.analysis_data)
                 updated_late_hour_coverage = optimizer.calculate_late_hour_coverage(edited_roster)
 
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
-                            delta=f"{updated_metrics['total_capacity'] - st.session_state.metrics['total_capacity']:,.0f}")
-                with col2:
-                    st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
-                with col3:
-                    st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
-                            delta=f"{updated_metrics['utilization_rate'] - st.session_state.metrics['utilization_rate']:.1f}")
-                with col4:
-                    st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
-                            delta=f"{updated_answer_rate - st.session_state.answer_rate:.1f}")
+                if updated_metrics is not None:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
+                                delta=f"{updated_metrics['total_capacity'] - st.session_state.metrics['total_capacity']:,.0f}")
+                    with col2:
+                        st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
+                    with col3:
+                        st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
+                                delta=f"{updated_metrics['utilization_rate'] - st.session_state.metrics['utilization_rate']:.1f}")
+                    with col4:
+                        st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
+                                delta=f"{updated_answer_rate - st.session_state.answer_rate:.1f}")
+                else:
+                    st.error("Failed to calculate updated metrics.")
 
         # Download options
         st.markdown('<div class="section-header"><h2>💾 Download Options</h2></div>', unsafe_allow_html=True)
 
-        csv = st.session_state.formatted_roster.to_csv(index=False)
+        if st.session_state.formatted_roster is not None:
+            csv = st.session_state.formatted_roster.to_csv(index=False)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "📥 Download as CSV",
-                csv,
-                "call_center_roster.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        with col2:
-            excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
-            excel_data = excel_buffer.getvalue()
-            st.download_button(
-                "📥 Download as Excel",
-                excel_data,
-                "call_center_roster.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    "📥 Download as CSV",
+                    csv,
+                    "call_center_roster.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            with col2:
+                excel_buffer = BytesIO()
+                with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                    st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
+                excel_data = excel_buffer.getvalue()
+                st.download_button(
+                    "📥 Download as Excel",
+                    excel_data,
+                    "call_center_roster.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+    elif 'roster_df' in st.session_state:
+        st.warning("Metrics calculation failed. Please try generating the roster again.")
 
 if __name__ == "__main__":
     main()
