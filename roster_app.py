@@ -7,6 +7,7 @@ import plotly.express as px
 from io import BytesIO
 import base64
 import random
+import openpyxl
 
 # Page configuration
 st.set_page_config(
