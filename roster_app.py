@@ -92,6 +92,7 @@ class CallCenterRosterOptimizer:
             {"name": "8-5", "times": (8, 17), "display": "08:00 o 17:00"},
             {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00"},
             {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00"},
+            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00"},
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
