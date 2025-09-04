@@ -84,9 +84,14 @@ class CallCenterRosterOptimizer:
         self.split_shift_patterns = [
             {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00"},
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
-            {"name": "10-3 & 5-9", "times": (10, 15, 17, 21), "display": "10:00 to 15:00 & 17:00 to 21:00"},
+            {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00"},
             {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00"},
             {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00"},
+            {"name": "10-7", "times": (10, 17), "display": "10:00 to 19:00"},
+            {"name": "7-4", "times": (7, 16), "display": "07:00 to 16:00"},
+            {"name": "8-5", "times": (8, 17), "display": "08:00 o 17:00"},
+            {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00"},
+            {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00"},
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
