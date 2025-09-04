@@ -422,7 +422,7 @@ class CallCenterRosterOptimizer:
                 18: 224.9, 19: 179.3, 20: 113.9, 21: 0
             },
             'peak_hours': [11, 12, 13, 14],
-            'total_daily_calls': 2975
+            'total_daily_calls': 3130
         }
 
     def generate_roster(self, straight_shifts, split_shifts, analysis_data, manual_splits=None):
@@ -1234,9 +1234,9 @@ def main():
                     18: 224.9, 19: 179.3, 20: 113.9, 21: 0
                 },
                 'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': 2975
+                'total_daily_calls': 3130
             }
-            st.metric("Estimated Daily Calls", f"{2975:,.0f}")
+            st.metric("Estimated Daily Calls", f"{3130:,.0f}")
             st.metric("Estimated Weekly Calls", "20,825")
 
     with col2:
