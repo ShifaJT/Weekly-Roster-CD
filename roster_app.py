@@ -1237,7 +1237,7 @@ def main():
                 'total_daily_calls': 3130
             }
             st.metric("Estimated Daily Calls", f"{3130:,.0f}")
-            st.metric("Estimated Weekly Calls", "20,825")
+            st.metric("Estimated Weekly Calls", "22,400")
 
     with col2:
         st.header("🎯 Generate Roster")
