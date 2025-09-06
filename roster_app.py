@@ -351,7 +351,7 @@ class CallCenterRosterOptimizer:
             try:
                 xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
             except:
-                if uploaded_file.name.endswith('.极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场xls'):
+                if uploaded_file.name.endswith('.xls'):
                     st.error("XLS format detected. Please convert your file to XLSX format.")
                     st.info("You can convert XLS to XLSX by opening in Excel and saving as XLSX.")
                     return self.get_sample_data()
@@ -378,7 +378,7 @@ class CallCenterRosterOptimizer:
                         'total_daily_calls': total_daily_calls
                     }
 
-            elif 'Daily_Data' in xls极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场.sheet_names:
+            elif 'Daily_Data' in xls.sheet_names:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='openpyxl')
                 except:
