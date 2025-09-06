@@ -8,7 +8,6 @@ from io import BytesIO
 import base64
 import random
 import openpyxl  # Added for Excel support
-from dateutil import parser
 
 # Page configuration
 st.set_page_config(
@@ -118,7 +117,7 @@ class CallCenterRosterOptimizer:
             {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M"},
             {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
-            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour":11, "can_split": True, "gender": "M"},
+            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "M"},
             {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
@@ -702,98 +701,98 @@ class CallCenterRosterOptimizer:
         return daily_rates
 
     def show_editable_roster(self, roster_df, week_offs, leave_data):
-    """Display an editable roster table with week offs and leave information"""
-    st.subheader("✏️ Edit Roster Manually")
+        """Display an editable roster table with week offs and leave information"""
+        st.subheader("✏️ Edit Roster Manually")
 
-    edited_df = st.data_editor(
-        roster_df,
-        column_config={
-            "Champion": st.column_config.SelectboxColumn(
-                "Champion",
-                options=[champ["name"] for champ in self.champions],
-                required=True
-            ),
-            "Shift Type": st.column_config.SelectboxColumn(
-                "Shift Type",
-                options=["Straight", "Split"],
-                required=True
-            ),
-            "Start Time": st.column_config.TextColumn(
-                "Start Time",
-                help="Format: HH:MM to HH:MM or HH:MM to HH:MM & HH:MM to HH:MM for split shifts"
-            ),
-            "End Time": st.column_config.TextColumn(
-                "End Time"
-            )
-        },
-        hide_index=True,
-        num_rows="dynamic",
-        use_container_width=True
-    )
+        edited_df = st.data_editor(
+            roster_df,
+            column_config={
+                "Champion": st.column_config.SelectboxColumn(
+                    "Champion",
+                    options=[champ["name"] for champ in self.champions],
+                    required=True
+                ),
+                "Shift Type": st.column_config.SelectboxColumn(
+                    "Shift Type",
+                    options=["Straight", "Split"],
+                    required=True
+                ),
+                "Start Time": st.column_config.TextColumn(
+                    "Start Time",
+                    help="Format: HH:MM to HH:MM or HH:MM to HH:MM & HH:MM to HH:MM for split shifts"
+                ),
+                "End Time": st.column_config.TextColumn(
+                    "End Time"
+                )
+            },
+            hide_index=True,
+            num_rows="dynamic",
+            use_container_width=True
+        )
 
-    st.subheader("📅 Edit Weekly Offs")
-    week_off_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        st.subheader("📅 Edit Weekly Offs")
+        week_off_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    week_off_editor_data = []
-    for champ, off_day in week_offs.items():
-        week_off_editor_data.append({
-            "Champion": champ,
-            "Current Day Off": off_day if off_day in week_off_days else "No day off"
-        })
+        week_off_editor_data = []
+        for champ, off_day in week_offs.items():
+            week_off_editor_data.append({
+                "Champion": champ,
+                "Current Day Off": off_day if off_day in week_off_days else "No day off"
+            })
 
-    week_off_df = pd.DataFrame(week_off_editor_data)
+        week_off_df = pd.DataFrame(week_off_editor_data)
 
-    edited_week_offs = st.data_editor(
-        week_off_df,
-        column_config={
-            "Champion": st.column_config.SelectboxColumn(
-                "Champion",
-                options=[champ["name"] for champ in self.champions],
-                required=True
-            ),
-            "Current Day Off": st.column_config.SelectboxColumn(
-                "Day Off",
-                options=week_off_days + ["No day off"],
-                required=True
-            )
-        },
-        hide_index=True,
-        use_container_width=True
-    )
+        edited_week_offs = st.data_editor(
+            week_off_df,
+            column_config={
+                "Champion": st.column_config.SelectboxColumn(
+                    "Champion",
+                    options=[champ["name"] for champ in self.champions],
+                    required=True
+                ),
+                "Current Day Off": st.column_config.SelectboxColumn(
+                    "Day Off",
+                    options=week_off_days + ["No day off"],
+                    required=True
+                )
+            },
+            hide_index=True,
+            use_container_width=True
+        )
 
-    new_week_offs = {}
-    for _, row in edited_week_offs.iterrows():
-        if row["Current Day Off"] != "No day off":
-            new_week_offs[row["Champion"]] = row["Current Day Off"]
+        new_week_offs = {}
+        for _, row in edited_week_offs.iterrows():
+            if row["Current Day Off"] != "No day off":
+                new_week_offs[row["Champion"]] = row["Current Day Off"]
 
-    st.subheader("🏥 Edit Leave Information")
-    # Get the week dates for context
-    today = datetime.now()
-    week_start = today - timedelta(days=today.weekday())
-    week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
-    
-    # Create date-specific leave editor
-    leave_editor_data = []
-    for champ in self.champions:
-        champ_name = champ['name']
-        champ_data = {"Champion": champ_name}
+        st.subheader("🏥 Edit Leave Information")
+        leave_types = ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off"]
         
-        # Add leave type columns
-        for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off"]:
-            champ_data[leave_type] = leave_data.get(champ_name, {}).get(leave_type.lower().replace(' ', '_'), 0)
+        leave_editor_data = []
+        for champ_name, leave_info in leave_data.items():
+            leave_editor_data.append({
+                "Champion": champ_name,
+                "Sick Leave": leave_info.get('sick_leave', 0),
+                "Casual Leave": leave_info.get('casual_leave', 0),
+                "Period Leave": leave_info.get('period_leave', 0),
+                "Annual Leave": leave_info.get('annual_leave', 0),
+                "Comp Off": leave_info.get('comp_off', 0)
+            })
         
-        # Add date-specific leave columns
-        for i, day in enumerate(week_days):
-            date_str = week_dates[i]
-            champ_data[f"{day} ({date_str})"] = leave_data.get(champ_name, {}).get('date_specific', {}).get(date_str, "")
+        # Add champions not in leave_data
+        for champ in self.champions:
+            if champ['name'] not in leave_data:
+                leave_editor_data.append({
+                    "Champion": champ['name'],
+                    "Sick Leave": 0,
+                    "Casual Leave": 0,
+                    "Period Leave": 0,
+                    "Annual Leave": 0,
+                    "Comp Off": 0
+                })
         
-        leave_editor_data.append(champ_data)
-    
-    leave_df = pd.DataFrame(leave_editor_data)
-     
+        leave_df = pd.DataFrame(leave_editor_data)
+        
         edited_leave_data = st.data_editor(
             leave_df,
             column_config={
