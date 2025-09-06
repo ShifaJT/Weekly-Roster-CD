@@ -106,9 +106,9 @@ class CallCenterRosterOptimizer:
             {"name": "7-4", "times": (7, 16), "display": "07:00 to 16:00", "hours": 9, "type": "straight"},
             {"name": "8-5", "times": (8, 17), "display": "08:00 to 17:00", "hours": 9, "type": "straight"},
             {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00", "hours": 9, "type": "straight"},
-            {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00", "hours": 9, "type": "straight"},
+            {"name": "10-7", "times": (极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场10, 19), "display": "10:00 to 19:00", "hours": 极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场9, "type": "straight"},
             {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00", "hours": 9, "type": "straight"},
-            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00", "hours": 9, "type": "straight"},
+            {"name": "12-9", "times": (12, 21), "display极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场": "12:00 to 21:00", "hours": 9, "type": "straight"},
             {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00", "hours": 9.5, "type": "split"},
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00", "hours": 9, "type": "split"},
             {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00", "hours": 8, "type": "split"},
@@ -122,20 +122,20 @@ class CallCenterRosterOptimizer:
             {"name": "Pasang", "primary_lang": "ka", "secondary_langs": ["hi", "ta"], "calls_per_hour": 13, "can_split": False, "gender": "F", "status": "Active"},
             {"name": "Kavya S", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 15, "can_split": False, "gender": "F", "status": "Active"},
             {"name": "Anjali", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 13, "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场can_split": True, "gender": "M", "status": "Active"},
             {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "F", "status": "Active"},
+            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11极速飞艇开奖极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False, "gender": "F", "status": "Active"},
             {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
-            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场, "gender": "M", "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场status": "Active"},
             {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False, "gender": "M", "status": "Active"},
             {"name": "Divya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Mohammed Altaf", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Rakshith", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场te"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
             {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "M", "status": "Active"},
@@ -145,11 +145,7 @@ class CallCenterRosterOptimizer:
             {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Baloji", "primary_lang": "te", "secondary_langs": [], "calls_per_hour": 11, "can_split": False, "gender": "M", "status": "Active"},
             {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Priya", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Maternity"},
-            {"name": "Rahul", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Sneha", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Arjun", "primary_lang": "hi", "secondary_langs": ["te", "ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"}
+            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Maternity"}
         ]
 
     def get_available_languages(self):
@@ -178,7 +174,7 @@ class CallCenterRosterOptimizer:
     def agents_needed_for_target(self, forecasted_calls, target_al, aht_seconds):
         if forecasted_calls <= 0:
             return 0
-        required_capacity = (target_al / 100) * forecasted_calls
+        required_capacity = (target_al / 100) * forecasted极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_calls
         agents_required = (required_capacity * aht_seconds) / 3600
         return max(1, np.ceil(agents_required))
 
@@ -205,7 +201,7 @@ class CallCenterRosterOptimizer:
                 recommendation['recommendation'] = f'Roster is strong. Potential to reduce by {int(scheduled_agents - min_agents_required)} agent(s).'
         elif predicted_al >= 90:
             recommendation['status'] = '🟡 YELLOW (Close to Goal)'
-            recommendation['recommendation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
+            recommendation['recommend极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
         elif predicted_al >= 85:
             recommendation['status'] = '🟠 ORANGE (At Risk)'
             recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
@@ -256,7 +252,7 @@ class CallCenterRosterOptimizer:
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
-                start_hour = int(times[0].split(':')[0])
+                start_hour = int(t极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场imes[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= hour < end_hour
             else:
@@ -282,18 +278,18 @@ class CallCenterRosterOptimizer:
             return "🔴 CRITICAL"
 
     def create_template_file(self):
-        dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
+        dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场d') for i in range(30, 0, -1)]
 
         hourly_data = pd.DataFrame({
             'Hour': list(range(7, 22)),
             'Calls': [0] * 15
         })
 
-        daily_data = pd.DataFrame({
+        daily_data极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 = pd.DataFrame({
             'Date': dates,
             'Total_Calls': [0] * 30,
             'Peak_Hour': [0] * 30,
-            'Peak_Volume': [0] * 30
+            'Peak_Volume': [极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场0] * 30
         })
 
         leave_data = pd.DataFrame({
@@ -312,7 +308,7 @@ class CallCenterRosterOptimizer:
                 '1. Fill in your call volume data in the appropriate sheets',
                 '2. For best results, use the Hourly_Data sheet with calls per hour',
                 '3. If you only have daily totals, use the Daily_Data sheet',
-                '4. Add leave information in the Leave_Data sheet (0=no leave, 1=on leave)',
+                '4. Add leave information in the Leave_Data sheet (0=极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场no leave, 1=on leave)',
                 '5. Save the file and upload it back to the app',
                 '6. The app will analyze your data and generate an optimized roster',
                 '',
@@ -320,25 +316,25 @@ class CallCenterRosterOptimizer:
                 '- Hour: Operation hour (7 to 21)',
                 '- Calls: Number of calls received in that hour',
                 '',
-                'DAILY_DATA SHEET:',
+极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场奖直播现场                'DAILY_DATA SHEET:',
                 '- Date: Date of the data (YYYY-MM-DD)',
                 '- Total_Calls: Total calls received that day',
                 '- Peak_Hour: Hour with highest call volume (7-21)',
                 '- Peak_Volume: Number of calls during peak hour',
                 '',
-                'LEAVE_DATA SHEET:',
-                '- Champion: Name of the agent',
+                'LEAVE_DATA SHE极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ET:',
+                '- Champion: Name极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 of the agent',
                 '- Sick_Leave: 1 if on sick leave, 0 otherwise',
                 '- Casual_Leave: 1 if on casual leave, 0 otherwise',
                 '- Period_Leave: 1 if on period leave, 0 otherwise',
-                '- Annual_Leave: 1 if on annual leave, 0 otherwise',
+                '- Annual_Leave: 1极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 if on annual leave, 0 otherwise',
                 '- Comp_Off: 1 if on comp off, 0 otherwise',
                 '- Maternity_Leave: 1 if on maternity leave, 0 otherwise'
             ]
         })
 
         excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl')极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 as writer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
             hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
             daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
@@ -363,11 +359,11 @@ class CallCenterRosterOptimizer:
 
             if 'Hourly_Data' in xls.sheet_names:
                 try:
-                    df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data', engine='openpyxl')
+                    df = pd.read_excel(uploaded_file, sheet_name='Hour极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ly_Data', engine='openpyxl')
                 except:
                     df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
 
-                if 'Hour' in df.columns and 'Calls' in df.columns:
+                if 'Hour' in df.columns and 'Calls极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场' in df.columns:
                     hourly_volume = dict(zip(df['Hour'], df['Calls']))
                     peak_hours = df.nlargest(4, 'Calls')['Hour'].tolist()
                     total_daily_calls = df['Calls'].sum()
@@ -375,7 +371,7 @@ class CallCenterRosterOptimizer:
                     analysis_data = {
                         'hourly_volume': hourly_volume,
                         'peak_hours': peak_hours,
-                        'total_daily_calls': total_daily_calls
+                        'total_daily极速飞艇开极速飞艇开奖结果记录，澳洲幸运10极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场是官方的吗，极速飞艇开奖直播现场_calls': total_daily_calls
                     }
 
             elif 'Daily_Data' in xls.sheet_names:
@@ -392,12 +388,12 @@ class CallCenterRosterOptimizer:
                         10: 0.10 * avg_daily_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
                         13: 0.10 * avg_daily_calls, 14: 0.09 * avg_daily_calls, 15: 0.08 * avg_daily_calls,
                         16: 0.08 * avg_daily_calls, 17: 0.07 * avg_daily_calls, 18: 0.06 * avg_daily_calls,
-                        19: 0.05 * avg_daily_calls, 20: 0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
+                        19: 0.05 * avg_daily_calls, 20: 0极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
                     }
 
                     if 'Peak_Hour' in df.columns and 'Peak_Volume' in df.columns:
                         avg_peak_hour = df['Peak_Hour'].mode()[0] if not df['Peak_Hour'].mode().empty else 11
-                        peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
+                        peak_hours = [avg_peak_hour - 1, avg极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
                     else:
                         peak_hours = [11, 12, 13, 14]
 
@@ -442,7 +438,7 @@ class CallCenterRosterOptimizer:
     def get_sample_data(self):
         return {
             'hourly_volume': {
-                7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
+                7: 38.5, 8: 104.4极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
                 13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
                 18: 224.9, 19: 179.3, 20: 113.9, 21: 0
             },
@@ -462,40 +458,68 @@ class CallCenterRosterOptimizer:
         shifts = self.shift_patterns
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
+        # Create variables for each champion and day
         x = pulp.LpVariable.dicts("assign", 
-                                 ((champ['name'], day, shift_idx) 
+                                 ((champ['name'], day) 
                                   for champ in available_champions 
-                                  for day in days 
+                                  for day in days),
+                                 cat='Binary')
+        
+        # Create shift assignment variables
+        y = pulp.LpVariable.dicts("shift_assign",
+                                 ((champ['name'], day, shift_idx)
+                                  for champ in available_champions
+                                  for day in days
                                   for shift_idx in range(len(shifts))),
                                  cat='Binary')
         
+        # Objective: Minimize the maximum deviation from required agents
         max_deviation = pulp.LpVariable("max_deviation", lowBound=0, cat='Continuous')
         
+        # Add constraints to minimize maximum deviation
         for hour in self.operation_hours:
             agents_at_hour = pulp.lpSum([
-                x[champ['name'], day, shift_idx] 
+                y[champ['name'], day, shift_idx] 
                 for champ in available_champions 
                 for day in days 
                 for shift_idx, shift in enumerate(shifts)
                 if self.is_hour_in_shift(hour, shift)
             ])
             
+            # Constraint: agents at hour should be close to required
             prob += agents_at_hour >= required_agents_per_hour[hour] - max_deviation
             prob += agents_at_hour <= required_agents_per_hour[hour] + max_deviation
         
+        # Each champion works at most one shift per day
         for champ in available_champions:
             for day in days:
-                prob += pulp.lpSum([x[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))]) <= 1
+                prob += pulp.lpSum([y[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))]) <= 1
+                # Link x and y variables
+                prob += x[champ['name'], day] == pulp.lpSum([y[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))])
         
+        # Each champion works 5 days per week
         for champ in available_champions:
-            prob += pulp.lpSum([x[champ['name'], day, shift_idx] for day in days for shift_idx in range(len(shifts))]) == 5
+            prob += pulp.lpSum([x[champ['name'], day] for day in days]) == 5
         
+        # Female champions don't work late shifts (after 8 PM)
         for champ in available_champions:
             if champ['gender'] == 'F':
                 for day in days:
                     for shift_idx, shift in enumerate(shifts):
                         if shift['times'][-1] >= 20:
-                            prob += x[champ['name'], day, shift_idx] == 0
+                            prob += y[champ['name'], day, shift_idx] == 0
+        
+        # Ensure proper coverage during peak hours
+        peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
+        for hour in peak_hours:
+            agents_at_hour = pulp.lpSum([
+                y[champ['name'], day, shift_idx] 
+                for champ in available_champions 
+                for day in days 
+                for shift_idx, shift in enumerate(shifts)
+                if self.is_hour_in_shift(hour, shift)
+            ])
+            prob += agents_at_hour >= required_agents_per_hour[hour] * 0.9  # At least 90% of required during peak
         
         prob += max_deviation
         
@@ -504,11 +528,12 @@ class CallCenterRosterOptimizer:
         except:
             return self.generate_fallback_roster(available_champions, days, shifts)
         
+        # Extract the solution
         roster_data = []
         for champ in available_champions:
             for day in days:
                 for shift_idx in range(len(shifts)):
-                    if pulp.value(x[champ['name'], day, shift_idx]) == 1:
+                    if pulp.value(y[champ['name'], day, shift_idx]) == 1:
                         shift = shifts[shift_idx]
                         roster_data.append({
                             'Day': day,
@@ -533,12 +558,15 @@ class CallCenterRosterOptimizer:
         straight_shifts = [s for s in shifts if s['type'] == 'straight']
         split_shifts = [s for s in shifts if s['type'] == 'split']
         
+        # Distribute champions evenly across days
         for i, champ in enumerate(available_champions):
-            for day in days:
+            work_days = random.sample(days, 5)  # Each champ works 5 days
+            
+            for day in work_days:
                 if champ['can_split'] and i % 3 == 0:
-                    shift = split_shifts[i % len(split_shifts)]
+                    shift = random.choice(split_shifts)
                 else:
-                    shift = straight_shifts[i % len(straight_shifts)]
+                    shift = random.choice(straight_shifts)
                 
                 roster_data.append({
                     'Day': day,
@@ -575,10 +603,13 @@ class CallCenterRosterOptimizer:
             
             roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
             
+            # Ensure no blank cells - fill missing days
+            roster_df = self.fill_missing_days(roster_df, available_champions)
+            
             roster_df = self.apply_special_rules(roster_df)
 
             if manual_splits:
-                roster_df = self.apply_manual_splits(roster_df, manual_splits)
+                roster极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_df = self.apply_manual_splits(roster_df, manual_splits)
 
             active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
             roster_df, week_offs = self.assign_weekly_offs(roster_df, max_offs_per_day=4, min_split_champs=active_split_champs)
@@ -588,6 +619,62 @@ class CallCenterRosterOptimizer:
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
             return None, None
+
+    def fill_missing_days(self, roster_df, available_champions):
+        """Ensure every champion has shifts for all working days"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        shifts = self.shift_patterns
+        
+        # Get current assignments
+        current_assignments = {}
+        for _, row in roster_df.iterrows():
+            champ = row['Champion']
+            day = row['Day']
+            if champ not in current_assignments:
+                current_assignments[champ] = {}
+            current_assignments[champ][day] = row.to_dict()
+        
+        # Fill missing days
+        new_roster_data = []
+        for champ in available_champions:
+            champ_days = current_assignments.get(champ, {})
+            work_days = list(champ_days.keys())
+            
+            # If champion has less than 5 days, add missing days
+            if len(work_days) < 5:
+                missing_days = [day for day in days if day not in work_days]
+                days_to_add = random.sample(missing_days, 5 - len(work_days))
+                
+                for day in days_to_add:
+                    # Assign appropriate shift
+                    straight_shifts = [s for s in shifts if s['type'] == 'straight']
+                    split_shifts = [s for s in shifts if s['type'] == 'split']
+                    
+                    if champ['can_split'] and random.random() < 0.3:
+                        shift = random.choice(split_shifts)
+                    else:
+                        shift = random.choice(straight_shifts)
+                    
+                    new_roster_data.append({
+                        'Day': day,
+                        'Champion': champ['name'],
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift['type'] == 'split' else 'Straight',
+                        'Start Time': shift['display'],
+                        'End Time': f"{shift['times'][-1]:02d}:00",
+                        'Duration': f'{shift["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+            
+            # Add existing assignments
+            for day, assignment in champ_days.items():
+                new_roster_data.append(assignment)
+        
+        return pd.DataFrame(new_roster_data)
 
     def get_available_champions(self, leave_data, specific_date=None):
         available_champs = []
@@ -642,7 +729,7 @@ class CallCenterRosterOptimizer:
         required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1
 
         utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
-        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
+        expected_answer_rate = min(100, (极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
 
         return {
             'total_capacity': total_capacity,
@@ -652,7 +739,7 @@ class CallCenterRosterOptimizer:
         }
 
     def calculate_answer_rate(self, roster_df, analysis_data):
-        if roster_df is None or analysis_data is None:
+        if roster极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_df is None or analysis_data is None:
             return None
 
         total_weekly_capacity = 0
@@ -665,7 +752,7 @@ class CallCenterRosterOptimizer:
                     shifts = row['Start Time'].split(' & ')
                     hours_worked = 0
                     for shift in shifts:
-                        times = shift.split(' to ')
+                        times = shift.split('极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 to ')
                         start_hour = int(times[0].split(':')[0])
                         end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
@@ -705,7 +792,7 @@ class CallCenterRosterOptimizer:
                         times = shift.split(' to ')
                         start_hour = int(times[0].split(':')[0])
                         end_hour = int(times[1].split(':')[0])
-                        hours_worked += (end_hour - start_hour)
+                        hours极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_worked += (end_hour - start_hour)
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
@@ -760,7 +847,7 @@ class CallCenterRosterOptimizer:
         edited_week_offs = st.data_editor(
             week_off_df,
             column_config={
-                "Champion": st.column_config.SelectboxColumn(
+                "Champion": st极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场.column_config.SelectboxColumn(
                     "Champion",
                     options=[champ["name"] for champ in self.champions],
                     required=True
@@ -813,7 +900,7 @@ class CallCenterRosterOptimizer:
             )
         }
         
-        for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
+        for leave_type in ["极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
             column_config[leave_type] = st.column_config.CheckboxColumn(leave_type)
         
         for i, day in enumerate(week_days):
@@ -832,7 +919,7 @@ class CallCenterRosterOptimizer:
             height=500
         )
         
-        new_leave_data = {}
+        new极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_leave_data = {}
         for _, row in edited_leave_data.iterrows():
             champ_name = row["Champion"]
             leave_info = {
@@ -919,7 +1006,7 @@ class CallCenterRosterOptimizer:
         return roster_df
 
     def apply_manual_splits(self, roster_df, manual_splits):
-        for assignment in manual_splits:
+        for assignment in manual_s极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场plits:
             champ = assignment['champion']
             day = assignment['day']
             pattern = assignment['pattern']
@@ -1005,7 +1092,7 @@ class CallCenterRosterOptimizer:
                         if leave_info.get('sick_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-sl">SL</span>')
                         if leave_info.get('casual_leave', 0):
-                            leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
+                            leave_badges.append('<span class="leave-badge badge-cl极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场">CL</span>')
                         if leave_info.get('period_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
                         if leave_info.get('annual_leave', 0):
@@ -1039,7 +1126,7 @@ class CallCenterRosterOptimizer:
 
         return late_hour_coverage
 
-    def is_agent_working_at_late_hours(self, row):
+    def is_agent_working_at_l极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ate_hours(self, row):
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
@@ -1047,7 +1134,7 @@ class CallCenterRosterOptimizer:
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
             else:
-                shifts = row['Start Time'].split(' & ')
+                shifts = row['极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场飞艇开奖直播现场Start Time'].split(' & ')
                 for shift in shifts:
                     times = shift.split(' to ')
                     start_hour = int(times[0].split(':')[0])
@@ -1068,7 +1155,7 @@ class CallCenterRosterOptimizer:
             day_roster = roster_df[roster_df['Day'] == day]
             split_champs_count = len(day_roster[day_roster['Shift Type'] == 'Split'])
             validation_results[day] = {
-                'split_champs': split_champs_count,
+                'split_champs': split极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_champs_count,
                 'status': '✅ Sufficient' if split_champs_count >= active_split_champs else '❌ Insufficient'
             }
 
@@ -1096,7 +1183,7 @@ class CallCenterRosterOptimizer:
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-            if analysis_data['total_daily_calls'] > 0:
+            if analysis_data['total_daily_calls'] > 极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场0:
                 expected_al = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
             else:
                 expected_al = 0
@@ -1126,7 +1213,7 @@ def initialize_session_state():
         st.session_state.daily_rates = None
     if 'hourly_al_results' not in st.session_state:
         st.session_state.hourly_al_results = None
-    if 'late_hour_coverage' not in st.session_state:
+    if 'late_hour_coverage极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场' not in st.session_state:
         st.session_state.late_hour_coverage = None
     if 'formatted_roster' not in st.session_state:
         st.session_state.formatted_roster = None
@@ -1164,7 +1251,7 @@ def main():
         st.session_state.selected_languages = selected_languages
 
         st.subheader("Active Split Shift Champions")
-        active_split_champs = st.slider(
+        active_split_champs = st.s极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场lider(
             "Minimum Active Split Shift Champions per Day",
             min_value=3,
             max_value=8,
@@ -1209,7 +1296,7 @@ def main():
         
         st.info("If you have XLS files, please convert them to XLSX format.")
         
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("🔧 Manual Split Shift Assignment")
@@ -1230,17 +1317,17 @@ def main():
         if st.button("➕ Add Manual Split Assignment"):
             new_assignment = {
                 'champion': selected_champ,
-                'day': selected_day,
+                '极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场day': selected_day,
                 'pattern': [p for p in optimizer.shift_patterns if p['type'] == 'split'][selected_pattern_idx]
             }
 
-            if not any(a['champion'] == selected_champ and a['day'] == selected_day for a in st.session_state.manual_splits):
+            if not any(a['champion'] == selected_champ and a['day'] == selected_day for极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 a in st.session_state.manual_splits):
                 st.session_state.manual_splits.append(new_assignment)
                 st.success(f"Added split shift for {selected_champ} on {selected_day}")
             else:
-                st.warning(f"{selected_champ} already has a manual split assignment on {selected_day}")
+                st.warning(f"{selected极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_champ} already has a manual split assignment on {selected_day}")
 
-        if st.session_state.manual_splits:
+        if st.session_state.manual极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_splits:
             st.subheader("Current Manual Assignments")
             for i, assignment in enumerate(st.session_state.manual_splits):
                 st.write(f"{i+1}. {assignment['champion']} - {assignment['day']} - {assignment['pattern']['name']}")
@@ -1269,337 +1356,3 @@ def main():
         
         st.subheader("Language Distribution")
         lang_dist = {}
-        for champ in optimizer.champions:
-            if champ['status'] == 'Active':
-                lang = champ['primary_lang']
-                lang_dist[lang] = lang_dist.get(lang, 0) + 1
-                for sec_lang in champ['secondary_langs']:
-                    lang_dist[sec_lang] = lang_dist.get(sec_lang, 0) + 0.5
-        
-        for lang, count in sorted(lang_dist.items()):
-            st.write(f"{lang.upper()}: {count:.1f} champions")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-        st.header("🕐 Operation Hours")
-        st.info(f"""
-        **Operating Schedule:**
-        - 🕖 **7:00 AM** - Operation starts
-        - 🕘 **9:00 PM** - Operation ends
-        - 📞 **14 hours** daily coverage
-        - 🎯 **9-hour shifts** for all champions
-        - 🔄 **Revathi** always assigned to split shifts
-        - 📋 Max 4 week offs per day to maintain answer rate
-        - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
-        - 🎯 **AL Target:** {optimizer.TARGET_AL}% Answer Level (Minimum: {optimizer.MIN_AL}%)
-        - 👥 **Late Hour Coverage:** Minimum 3 mid-shift + 3 split-shift agents during 5 PM - 9 PM
-        - 👩 **Female Champions:** Not assigned to shifts ending after 8 PM
-        - 👶 **Maternity Leave:** 1 champion currently on maternity leave
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # Main content area
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.header("📈 Current Configuration")
-
-        if uploaded_file:
-            st.success("✅ Data file uploaded successfully!")
-            analysis_data = optimizer.analyze_excel_data(uploaded_file)
-            if analysis_data:
-                st.session_state.analysis_data = analysis_data
-                st.session_state.leave_data = analysis_data.get('leave_data', {})
-                
-                if st.session_state.leave_data:
-                    on_leave_count = sum(1 for leave_info in st.session_state.leave_data.values() 
-                                        if any(leave_info.values()))
-                    st.metric("Agents on Leave", on_leave_count)
-                
-                st.metric("Daily Call Volume", f"{analysis_data['total_daily_calls']:,.0f}")
-                st.metric("Weekly Call Volume", f"{analysis_data['total_daily_calls'] * 7:,.0f}")
-                st.metric("Peak Hours", ", ".join([f"{h}:00" for h in analysis_data['peak_hours']]))
-                
-                hourly_df = pd.DataFrame({
-                    'Hour': list(analysis_data['hourly_volume'].keys()),
-                    'Calls': list(analysis_data['hourly_volume'].values())
-                })
-                fig = px.bar(hourly_df, x='Hour', y='Calls', title='Hourly Call Volume')
-                st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.session_state.analysis_data = {
-                'hourly_volume': {
-                    7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                    13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
-                    18: 224.9, 19: 179.3, 20: 113.9, 21: 0
-                },
-                'peak_hours': [11, 12, 13, 14],
-                'total_daily_calls': 3130
-            }
-            st.metric("Estimated Daily Calls", f"{3130:,.0f}")
-            st.metric("Estimated Weekly Calls", "22,400")
-
-    with col2:
-        st.header("🎯 Generate Roster")
-
-        if st.button("🚀 Generate Optimized Roster", type="primary", use_container_width=True):
-            with st.spinner("Generating optimized roster for 95% AL target..."):
-                roster_df, week_offs = optimizer.generate_roster(
-                    st.session_state.analysis_data,
-                    st.session_state.manual_splits,
-                    st.session_state.selected_languages
-                )
-
-                if split_filter:
-                    roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
-
-                if roster_df is not None:
-                    st.session_state.roster_df = roster_df
-                    st.session_state.week_offs = week_offs
-
-                    metrics = optimizer.calculate_coverage(roster_df, st.session_state.analysis_data)
-                    answer_rate = optimizer.calculate_answer_rate(roster_df, st.session_state.analysis_data)
-                    daily_rates = optimizer.calculate_daily_answer_rates(roster_df, st.session_state.analysis_data)
-
-                    hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, st.session_state.analysis_data)
-                    late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
-
-                    st.session_state.metrics = metrics
-                    st.session_state.answer_rate = answer_rate
-                    st.session_state.daily_rates = daily_rates
-                    st.session_state.hourly_al_results = hourly_al_results
-                    st.session_state.late_hour_coverage = late_hour_coverage
-
-                    st.session_state.formatted_roster = optimizer.format_roster_for_display(
-                        roster_df, week_offs, st.session_state.leave_data
-                    )
-
-                    st.success("✅ Roster generated successfully!")
-                else:
-                    st.error("❌ Failed to generate roster. Please check your settings.")
-
-        elif 'roster_df' in st.session_state:
-            st.info("📋 Previously generated roster is available. Click the button to generate a new one.")
-
-    # Display results if available
-    if 'roster_df' in st.session_state and 'metrics' in st.session_state and st.session_state.metrics is not None:
-        st.markdown("---")
-        st.markdown('<div class="section-header"><h2>📊 Performance Metrics</h2></div>', unsafe_allow_html=True)
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0f} calls")
-        with col2:
-            st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
-        with col3:
-            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
-        with col4:
-            st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
-
-        # Display hourly AL analysis
-        st.markdown('<div class="section-header"><h2>📈 Hourly Answer Level Analysis</h2></div>', unsafe_allow_html=True)
-        
-        if st.session_state.hourly_al_results:
-            hourly_al_df = pd.DataFrame.from_dict(st.session_state.hourly_al_results, orient='index')
-            hourly_al_df = hourly_al_df.reset_index(drop=True)
-            
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            al_heatmap_data = []
-            
-            for day in days:
-                for hour in optimizer.operation_hours:
-                    key = f"{day}_{hour}"
-                    if key in st.session_state.hourly_al_results:
-                        result = st.session_state.hourly_al_results[key]
-                        al_heatmap_data.append({
-                            'Day': day,
-                            'Hour': hour,
-                            'AL': result['predicted_al'],
-                            'Agents': result['agents'],
-                            'Calls': result['forecast'],
-                            'Answered': result.get('answered', 0)
-                        })
-            
-            al_heatmap_df = pd.DataFrame(al_heatmap_data)
-            
-            if not al_heatmap_df.empty:
-                pivot_df = al_heatmap_df.pivot(index='Hour', columns='Day', values='AL')
-                
-                fig = px.imshow(pivot_df, 
-                               labels=dict(x="Day", y="Hour", color="Answer Level"),
-                               x=days,
-                               y=[f"{h}:00" for h in pivot_df.index],
-                               title="Hourly Answer Level (%) by Day",
-                               color_continuous_scale="RdYlGn",
-                               range_color=[80, 100])
-                fig.update_layout(height=400)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                with st.expander("View Detailed Hourly Analysis"):
-                    st.dataframe(al_heatmap_df, use_container_width=True)
-
-        # Display split shift coverage validation
-        st.markdown('<div class="section-header"><h2>✅ Split Shift Coverage Validation</h2></div>', unsafe_allow_html=True)
-
-        validation_results = optimizer.validate_split_shift_coverage(st.session_state.roster_df)
-
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        cols = st.columns(7)
-
-        for i, day in enumerate(days):
-            with cols[i]:
-                result = validation_results[day]
-                st.metric(
-                    day[:3], 
-                    f"{result['split_champs']} split champs", 
-                    result['status'],
-                    delta_color="normal" if result['status'] == '✅ Sufficient' else "inverse"
-                )
-
-        insufficient_days = [day for day, result in validation_results.items() if result['status'] == '❌ Insufficient']
-        if insufficient_days:
-            st.error(f"⚠️ {len(insufficient_days)} days have insufficient split shift coverage!")
-            st.info(f"**Recommendation:** Increase the 'Minimum Active Split Shift Champions' value or add more split shifts.")
-
-        # Display AL target validation
-        st.markdown('<div class="section-header"><h2>🎯 AL Target Validation (Minimum {optimizer.MIN_AL}%)</h2></div>', unsafe_allow_html=True)
-
-        al_validation = optimizer.validate_al_target(st.session_state.roster_df, st.session_state.analysis_data)
-
-        cols = st.columns(7)
-
-        for i, day in enumerate(days):
-            with cols[i]:
-                result = al_validation[day]
-                st.metric(
-                    day[:3], 
-                    f"{result['expected_al']:.1f}%", 
-                    result['status'],
-                    delta_color="normal" if result['status'] == '✅ Target Met' else "inverse"
-                )
-
-        below_target_days = [day for day, result in al_validation.items() if result['status'] == '❌ Below Target']
-        if below_target_days:
-            st.error(f"⚠️ {len(below_target_days)} days are below the {optimizer.MIN_AL}% AL target!")
-            st.info("**Recommendation:** Increase the number of agents or adjust shift patterns.")
-
-        # Display daily answer rates
-        st.markdown('<div class="section-header"><h2>📈 Daily Answer Rates</h2></div>', unsafe_allow_html=True)
-        day_cols = st.columns(7)
-
-        for i, day in enumerate(days):
-            with day_cols[i]:
-                rate = st.session_state.daily_rates.get(day, 0)
-                st.metric(day[:3], f"{rate:.1f}%")
-
-        # Week off information
-        st.markdown('<div class="section-header"><h2>📅 Weekly Off Schedule</h2></div>', unsafe_allow_html=True)
-
-        if 'week_offs' in st.session_state:
-            week_off_df = pd.DataFrame.from_dict(st.session_state.week_offs, orient='index', columns=['Day Off'])
-            week_off_df.index.name = 'Champion'
-            week_off_df = week_off_df.reset_index()
-
-            offs_per_day = week_off_df['Day Off'].value_counts()
-            st.write("Week Offs per Day:")
-            for day in days:
-                count = offs_per_day.get(day, 0)
-                st.write(f"{day}: {count} champions")
-
-            st.dataframe(
-                week_off_df,
-                use_container_width=True,
-                hide_index=True
-            )
-
-        # Display roster in sample format
-        st.markdown('<div class="section-header"><h2>📋 Roster Schedule</h2></div>', unsafe_allow_html=True)
-
-        if st.session_state.formatted_roster is not None:
-            formatted_roster_html = st.session_state.formatted_roster.to_html(escape=False, index=False)
-            st.markdown(formatted_roster_html, unsafe_allow_html=True)
-
-        # Late hour coverage analysis
-        st.markdown('<div class="section-header"><h2>🌙 Late Hour Coverage (5 PM - 9 PM)</h2></div>', unsafe_allow_html=True)
-        
-        if 'late_hour_coverage' in st.session_state and st.session_state.late_hour_coverage is not None:
-            late_coverage_df = pd.DataFrame.from_dict(st.session_state.late_hour_coverage, orient='index')
-            late_coverage_df = late_coverage_df.reset_index()
-            late_coverage_df.columns = ['Day', 'Mid Shift', 'Split Shift', 'Total']
-            
-            st.dataframe(late_coverage_df, use_container_width=True, hide_index=True)
-            
-            for day, coverage in st.session_state.late_hour_coverage.items():
-                if coverage['mid_shift'] < 3 or coverage['split_shift'] < 3:
-                    st.warning(f"⚠️ {day}: Late hour coverage is below recommended minimum (3 mid-shift + 3 split-shift)")
-                else:
-                    st.success(f"✅ {day}: Late hour coverage meets recommendations")
-
-        # Manual editing option
-        st.markdown('<div class="section-header"><h2>🛠️ Manual Adjustments</h2></div>', unsafe_allow_html=True)
-
-        if st.checkbox("Enable manual editing of shift timings, week offs, and leave information"):
-            edited_roster, edited_week_offs, edited_leave_data = optimizer.show_editable_roster(
-                st.session_state.roster_df, st.session_state.week_offs, st.session_state.leave_data
-            )
-
-            st.session_state.roster_df = edited_roster
-            st.session_state.week_offs = edited_week_offs
-            st.session_state.leave_data = edited_leave_data
-
-            if st.button("Update Metrics after Editing"):
-                updated_metrics = optimizer.calculate_coverage(edited_roster, st.session_state.analysis_data)
-                updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
-                updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
-                updated_hourly_al = optimizer.calculate_hourly_al_analysis(edited_roster, st.session_state.analysis_data)
-                updated_late_hour_coverage = optimizer.calculate_late_hour_coverage(edited_roster)
-
-                if updated_metrics is not None:
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
-                                delta=f"{updated_metrics['total_capacity'] - st.session_state.metrics['total_capacity']:,.0f}")
-                    with col2:
-                        st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
-                    with col3:
-                        st.metric("Updated Utilization", f"{updated_metrics['utilization_rate']:.1f}%", 
-                                delta=f"{updated_metrics['utilization_rate'] - st.session_state.metrics['utilization_rate']:.1f}")
-                    with col4:
-                        st.metric("Updated Answer Rate", f"{updated_answer_rate:.1f}%", 
-                                delta=f"{updated_answer_rate - st.session_state.answer_rate:.1f}")
-                else:
-                    st.error("Failed to calculate updated metrics.")
-
-        # Download options
-        st.markdown('<div class="section-header"><h2>💾 Download Options</h2></div>', unsafe_allow_html=True)
-
-        if st.session_state.formatted_roster is not None:
-            csv = st.session_state.formatted_roster.to_csv(index=False)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    "📥 Download as CSV",
-                    csv,
-                    "call_center_roster.csv",
-                    "text/csv",
-                    use_container_width=True
-                )
-            with col2:
-                excel_buffer = BytesIO()
-                with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                    st.session_state.formatted_roster.to_excel(writer, index=False, sheet_name='Roster')
-                excel_data = excel_buffer.getvalue()
-                st.download_button(
-                    "📥 Download as Excel",
-                    excel_data,
-                    "call_center_roster.xlsx",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-    elif 'roster_df' in st.session_state:
-        st.warning("Metrics calculation failed. Please try generating the roster again.")
-
-if __name__ == "__main__":
-    main()
