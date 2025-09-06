@@ -117,7 +117,7 @@ class CallCenterRosterOptimizer:
             {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M"},
             {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
-            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "M"},
+            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour":11, "can_split": True, "gender": "M"},
             {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
             {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
@@ -348,13 +348,18 @@ class CallCenterRosterOptimizer:
             except:
                 # If that fails, try with xlrd (for xls files)
                 try:
-                    xls = pd.ExcelFile(uploaded_file, engine='xlrd')
-                except:
-                    # If both fail, install xlrd and try again
-                    import subprocess
-                    import sys
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", "xlrd"])
-                    xls = pd.ExcelFile(uploaded_file, engine='xlrd')
+                    # Check if file is xls format and provide instructions
+                    if uploaded_file.name.endswith('.xls'):
+                        st.error("XLS format detected. Please convert your file to XLSX format or use the manual data entry option below.")
+                        st.info("You can convert XLS to XLSX by opening in Excel and saving as XLSX.")
+                        return self.get_sample_data()
+                    else:
+                        # Try to read with default engine
+                        xls = pd.ExcelFile(uploaded_file)
+                except Exception as e:
+                    st.error(f"Cannot read Excel file: {str(e)}")
+                    st.info("Please convert your file to XLSX format or use the manual data entry option.")
+                    return self.get_sample_data()
                     
             analysis_data = {}
             leave_data = {}
@@ -364,7 +369,11 @@ class CallCenterRosterOptimizer:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data', engine='openpyxl')
                 except:
-                    df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data', engine='xlrd')
+                    try:
+                        df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
+                    except:
+                        st.warning("Could not read Hourly_Data sheet. Using sample data.")
+                        return self.get_sample_data()
 
                 if 'Hour' in df.columns and 'Calls' in df.columns:
                     hourly_volume = dict(zip(df['Hour'], df['Calls']))
@@ -381,7 +390,11 @@ class CallCenterRosterOptimizer:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='openpyxl')
                 except:
-                    df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='xlrd')
+                    try:
+                        df = pd.read_excel(uploaded_file, sheet_name='Daily_Data')
+                    except:
+                        st.warning("Could not read Daily_Data sheet. Using sample data.")
+                        return self.get_sample_data()
 
                 if 'Total_Calls' in df.columns:
                     avg_daily_calls = df['Total_Calls'].mean()
@@ -411,7 +424,11 @@ class CallCenterRosterOptimizer:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Leave_Data', engine='openpyxl')
                 except:
-                    df = pd.read_excel(uploaded_file, sheet_name='Leave_Data', engine='xlrd')
+                    try:
+                        df = pd.read_excel(uploaded_file, sheet_name='Leave_Data')
+                    except:
+                        st.warning("Could not read Leave_Data sheet. Leave data will be ignored.")
+                        df = pd.DataFrame()
                     
                 if 'Champion' in df.columns:
                     for _, row in df.iterrows():
@@ -433,7 +450,7 @@ class CallCenterRosterOptimizer:
 
         except Exception as e:
             st.error(f"Error reading Excel file: {str(e)}")
-            st.info("Please make sure you have the required dependencies installed.")
+            st.info("Using sample data instead. Please check your file format.")
             sample_data = self.get_sample_data()
             sample_data['leave_data'] = {}
             return sample_data
@@ -1134,9 +1151,13 @@ def main():
         st.subheader("Upload Your Data")
         uploaded_file = st.file_uploader(
             "Upload Your Call Volume Data", 
-            type=['xlsx', 'xls'],
-            help="Upload your filled-in call volume data Excel file"
+            type=['xlsx'],
+            help="Upload your filled-in call volume data Excel file (XLSX format only)"
         )
+        
+        # Manual data entry option
+        st.info("If you have XLS files, please convert them to XLSX format or use manual entry below.")
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
