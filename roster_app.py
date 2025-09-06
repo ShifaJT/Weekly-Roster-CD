@@ -1030,7 +1030,7 @@ class CallCenterRosterOptimizer:
                     hours_worked = 0
                     for shift in shifts:
                         times = shift.split(' to ')
-                        start_hour = int(times[极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场0].split(':')[0])
+                        start_hour = int(times[0].split(':')[0])
                         end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
 
