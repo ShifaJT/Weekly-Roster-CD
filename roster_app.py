@@ -108,9 +108,9 @@ class CallCenterRosterOptimizer:
             {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00", "hours": 9, "type": "straight"},
             {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00", "hours": 9, "type": "straight"},
             {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00", "hours": 9, "type": "straight"},
-            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00", "hours": 9, "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场type": "straight"},
-            {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场 to 21:00", "hours": 9.5, "type": "split"},
-            {"name": "8-1 & 5-9", "times": (8, 13极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00", "hours": 9, "type": "split"},
+            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00", "hours": 9, "type": "straight"},
+            {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00", "hours": 9.5, "type": "split"},
+            {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00", "hours": 9, "type": "split"},
             {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00", "hours": 8, "type": "split"},
         ]
 
@@ -126,9 +126,9 @@ class CallCenterRosterOptimizer:
             {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Active"},
             {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场F", "status": "Active"},
+            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Active"},
             {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
             {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False, "gender": "M", "status": "Active"},
@@ -236,7 +236,7 @@ class CallCenterRosterOptimizer:
 
                 forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
                 if forecasted_calls > 0:
-                    predicted_al, capacity, answered = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HAND极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场LING_TIME_SECONDS)
+                    predicted_al, capacity, answered = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
 
                     key = f"{day}_{hour}"
                     hourly_al_results[key] = {
@@ -264,7 +264,7 @@ class CallCenterRosterOptimizer:
                 for shift in shifts:
                     times = shift.split(' to ')
                     start_hour = int(times[0].split(':')[0])
-                    end_hour = int(times[极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场1].split(':')[0])
+                    end_hour = int(times[1].split(':')[0])
                     if start_hour <= hour < end_hour:
                         return True
                 return False
@@ -316,14 +316,14 @@ class CallCenterRosterOptimizer:
                 '5. Save the file and upload it back to the app',
                 '6. The app will analyze your data and generate an optimized roster',
                 '',
-                'HOURL极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场Y_DATA SHEET:',
+                'HOURLY_DATA SHEET:',
                 '- Hour: Operation hour (7 to 21)',
                 '- Calls: Number of calls received in that hour',
                 '',
                 'DAILY_DATA SHEET:',
                 '- Date: Date of the data (YYYY-MM-DD)',
                 '- Total_Calls: Total calls received that day',
-                '- Peak_Hour: Hour with highest call volume (极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场7-21)',
+                '- Peak_Hour: Hour with highest call volume (7-21)',
                 '- Peak_Volume: Number of calls during peak hour',
                 '',
                 'LEAVE_DATA SHEET:',
@@ -341,7 +341,7 @@ class CallCenterRosterOptimizer:
         with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
             hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
-            daily_data.to极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_excel(writer, sheet_name='Daily_Data', index=False)
+            daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
             leave_data.to_excel(writer, sheet_name='Leave_Data', index=False)
 
         return excel_buffer.getvalue()
@@ -351,7 +351,7 @@ class CallCenterRosterOptimizer:
             try:
                 xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
             except:
-                if uploaded_file.name.endswith('.极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场奖直播现场xls'):
+                if uploaded_file.name.endswith('.极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场xls'):
                     st.error("XLS format detected. Please convert your file to XLSX format.")
                     st.info("You can convert XLS to XLSX by opening in Excel and saving as XLSX.")
                     return self.get_sample_data()
@@ -378,7 +378,7 @@ class CallCenterRosterOptimizer:
                         'total_daily_calls': total_daily_calls
                     }
 
-            elif 'Daily_Data' in xls极速飞艇开奖结果记录，澳洲幸运10是官方的极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场吗，极速飞艇开奖直播现场.sheet_names:
+            elif 'Daily_Data' in xls极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场.sheet_names:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='openpyxl')
                 except:
@@ -389,7 +389,7 @@ class CallCenterRosterOptimizer:
 
                     hourly_volume = {
                         7: 0.02 * avg_daily_calls, 8: 0.05 * avg_daily_calls, 9: 0.08 * avg_daily_calls,
-                        10: 0.10 * avg_daily极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
+                        10: 0.10 * avg_daily_calls, 11: 0.12 * avg_daily_calls, 12: 0.11 * avg_daily_calls,
                         13: 0.10 * avg_daily_calls, 14: 0.09 * avg_daily_calls, 15: 0.08 * avg_daily_calls,
                         16: 0.08 * avg_daily_calls, 17: 0.07 * avg_daily_calls, 18: 0.06 * avg_daily_calls,
                         19: 0.05 * avg_daily_calls, 20: 0.03 * avg_daily_calls, 21: 0.01 * avg_daily_calls
@@ -402,7 +402,7 @@ class CallCenterRosterOptimizer:
                         peak_hours = [11, 12, 13, 14]
 
                     analysis_data = {
-                        'hour极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ly_volume': hourly_volume,
+                        'hourly_volume': hourly_volume,
                         'peak_hours': peak_hours,
                         'total_daily_calls': avg_daily_calls
                     }
@@ -443,7 +443,7 @@ class CallCenterRosterOptimizer:
         return {
             'hourly_volume': {
                 7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
-                13: 278.1, 14: 246.3, 15: 227.极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场4, 16: 240.0, 17: 236.2, 
+                13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
                 18: 224.9, 19: 179.3, 20: 113.9, 21: 0
             },
             'peak_hours': [11, 12, 13, 14],
@@ -495,7 +495,7 @@ class CallCenterRosterOptimizer:
                 for day in days:
                     for shift_idx, shift in enumerate(shifts):
                         if shift['times'][-1] >= 20:
-                            prob += x[champ['name'], day, shift极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_idx] == 0
+                            prob += x[champ['name'], day, shift_idx] == 0
         
         prob += max_deviation
         
@@ -1028,7 +1028,7 @@ class CallCenterRosterOptimizer:
         late_hour_coverage = {day: {"mid_shift": 0, "split_shift": 0, "total": 0} for day in days}
 
         for day in days:
-            day_roster = roster_df[roster_df['极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场Day'] == day]
+            day_roster = roster_df[roster_df['Day'] == day]
             for _, row in day_roster.iterrows():
                 if self.is_agent_working_at_late_hours(row):
                     if "&" in row['Start Time']:
@@ -1059,13 +1059,13 @@ class CallCenterRosterOptimizer:
             return False
 
     def validate_split_shift_coverage(self, roster_df):
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场Friday", "Saturday", "Sunday"]
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         validation_results = {}
 
         active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
 
         for day in days:
-            day_极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场roster = roster_df[roster_df['Day'] == day]
+            day_roster = roster_df[roster_df['Day'] == day]
             split_champs_count = len(day_roster[day_roster['Shift Type'] == 'Split'])
             validation_results[day] = {
                 'split_champs': split_champs_count,
@@ -1334,7 +1334,7 @@ def main():
                     13: 278.1, 14: 246.3, 15: 227.4, 16: 240.0, 17: 236.2, 
                     18: 224.9, 19: 179.3, 20: 113.9, 21: 0
                 },
-                'peak_hours': [11极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场, 12, 13, 14],
+                'peak_hours': [11, 12, 13, 14],
                 'total_daily_calls': 3130
             }
             st.metric("Estimated Daily Calls", f"{3130:,.0f}")
@@ -1480,7 +1480,7 @@ def main():
                 )
 
         below_target_days = [day for day, result in al_validation.items() if result['status'] == '❌ Below Target']
-        if below_target极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场_days:
+        if below_target_days:
             st.error(f"⚠️ {len(below_target_days)} days are below the {optimizer.MIN_AL}% AL target!")
             st.info("**Recommendation:** Increase the number of agents or adjust shift patterns.")
 
@@ -1553,12 +1553,12 @@ def main():
                 updated_answer_rate = optimizer.calculate_answer_rate(edited_roster, st.session_state.analysis_data)
                 updated_daily_rates = optimizer.calculate_daily_answer_rates(edited_roster, st.session_state.analysis_data)
                 updated_hourly_al = optimizer.calculate_hourly_al_analysis(edited_roster, st.session_state.analysis_data)
-                updated_l极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场ate_hour_coverage = optimizer.calculate_late_hour_coverage(edited_roster)
+                updated_late_hour_coverage = optimizer.calculate_late_hour_coverage(edited_roster)
 
                 if updated_metrics is not None:
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场f} calls", 
+                        st.metric("Updated Weekly Capacity", f"{updated_metrics['total_capacity']:,.0f} calls", 
                                 delta=f"{updated_metrics['total_capacity'] - st.session_state.metrics['total_capacity']:,.0f}")
                     with col2:
                         st.metric("Required Capacity", f"{updated_metrics['required_capacity']:,.0f} calls")
@@ -1583,7 +1583,7 @@ def main():
                     "📥 Download as CSV",
                     csv,
                     "call_center_roster.csv",
-                    "text/c极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场sv",
+                    "text/csv",
                     use_container_width=True
                 )
             with col2:
