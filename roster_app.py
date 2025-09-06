@@ -76,57 +76,55 @@ class CallCenterRosterOptimizer:
         self.operation_hours = list(range(7, 22))  # 7 AM to 9 PM
         self.champions = self.load_champions()
         
-        # Set target Answer Level to 90%
-        self.TARGET_AL = 90
-        self.MIN_AL = 90  # Minimum acceptable AL
+        # Set target Answer Level to 95%
+        self.TARGET_AL = 95
+        self.MIN_AL = 95  # Minimum acceptable AL
 
         # Custom shift patterns based on your requirements
-        self.split_shift_patterns = [
-            {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00"},
-            {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00"},
-            {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00"},
-            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00"},
-            {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00"},
-            {"name": "10-7", "times": (10, 17), "display": "10:00 to 19:00"},
-            {"name": "7-4", "times": (7, 16), "display": "07:00 to 16:00"},
-            {"name": "8-5", "times": (8, 17), "display": "08:00 o 17:00"},
-            {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00"},
-            {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00"},
-            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00"},
+        self.shift_patterns = [
+            {"name": "7-4", "times": (7, 16), "display": "07:00 to 16:00", "hours": 9, "type": "straight"},
+            {"name": "8-5", "times": (8, 17), "display": "08:00 to 17:00", "hours": 9, "type": "straight"},
+            {"name": "9-6", "times": (9, 18), "display": "09:00 to 18:00", "hours": 9, "type": "straight"},
+            {"name": "10-7", "times": (10, 19), "display": "10:00 to 19:00", "hours": 9, "type": "straight"},
+            {"name": "11-8", "times": (11, 20), "display": "11:00 to 20:00", "hours": 9, "type": "straight"},
+            {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00", "hours": 9, "type": "straight"},
+            {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00", "hours": 9.5, "type": "split"},
+            {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00", "hours": 9, "type": "split"},
+            {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00", "hours": 8, "type": "split"},
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202  # 3 minutes 22 seconds
 
     def load_champions(self):
         return [
-            {"name": "Revathi", "primary_lang": "ka", "secondary_langs": ["hi", "te", "ta"], "calls_per_hour": 14, "can_split": True},
-            {"name": "Pasang", "primary_lang": "ka", "secondary_langs": ["hi", "ta"], "calls_per_hour": 13, "can_split": False},
-            {"name": "Kavya S", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 15, "can_split": False},
-            {"name": "Anjali", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 14, "can_split": True},
-            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 12, "can_split": False},
-            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True},
-            {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True},
-            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False},
-            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False},
-            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False},
-            {"name": "Divya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": True},
-            {"name": "Mohammed Altaf", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 12, "can_split": True},
-            {"name": "Rakshith", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True},
-            {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True},
-            {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False},
-            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True},
-            {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False},
-            {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True},
-            {"name": "Baloji", "primary_lang": "", "secondary_langs": ["te"], "calls_per_hour": 11, "can_split": False},
-            {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True},
-            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False}
+            {"name": "Revathi", "primary_lang": "ka", "secondary_langs": ["hi", "te", "ta"], "calls_per_hour": 14, "can_split": True, "gender": "F"},
+            {"name": "Pasang", "primary_lang": "ka", "secondary_langs": ["hi", "ta"], "calls_per_hour": 13, "can_split": False, "gender": "F"},
+            {"name": "Kavya S", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 15, "can_split": False, "gender": "F"},
+            {"name": "Anjali", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 14, "can_split": True, "gender": "F"},
+            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 12, "can_split": False, "gender": "F"},
+            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "F"},
+            {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True, "gender": "F"},
+            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False, "gender": "F"},
+            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "F"},
+            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
+            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False, "gender": "M"},
+            {"name": "Divya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": True, "gender": "F"},
+            {"name": "Mohammed Altaf", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 12, "can_split": True, "gender": "M"},
+            {"name": "Rakshith", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M"},
+            {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
+            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "M"},
+            {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M"},
+            {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True, "gender": "M"},
+            {"name": "Baloji", "primary_lang": "te", "secondary_langs": [], "calls_per_hour": 11, "can_split": False, "gender": "M"},
+            {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True, "gender": "M"},
+            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F"}
         ]
 
     def calculate_hourly_capacity(self, num_agents, aht_seconds):
@@ -142,7 +140,7 @@ class CallCenterRosterOptimizer:
             predicted_al = (answered_calls / forecasted_calls) * 100
         else:
             predicted_al = 100
-        return round(predicted_al, 1), int(capacity)
+        return round(predicted_al, 1), int(capacity), int(answered_calls)
 
     def agents_needed_for_target(self, forecasted_calls, target_al, aht_seconds):
         """Calculates the minimum number of agents required to hit a target AL."""
@@ -155,13 +153,14 @@ class CallCenterRosterOptimizer:
 
     def analyze_roster_sufficiency(self, forecasted_calls, scheduled_agents, aht_seconds, target_al):
         """Analyzes if the scheduled roster is sufficient and recommends changes."""
-        predicted_al, capacity = self.predict_al(forecasted_calls, scheduled_agents, aht_seconds)
+        predicted_al, capacity, answered_calls = self.predict_al(forecasted_calls, scheduled_agents, aht_seconds)
         min_agents_required = self.agents_needed_for_target(forecasted_calls, target_al, aht_seconds)
 
         recommendation = {
             'forecasted_calls': forecasted_calls,
             'scheduled_agents': scheduled_agents,
             'current_capacity': capacity,
+            'answered_calls': answered_calls,
             'predicted_al': predicted_al,
             'min_agents_required': min_agents_required,
             'agents_deficit': max(0, min_agents_required - scheduled_agents),
@@ -174,10 +173,10 @@ class CallCenterRosterOptimizer:
             recommendation['recommendation'] = 'Roster is sufficient to target.'
             if scheduled_agents > min_agents_required + 1:
                 recommendation['recommendation'] = f'Roster is strong. Potential to reduce by {int(scheduled_agents - min_agents_required)} agent(s).'
-        elif predicted_al >= 85:
+        elif predicted_al >= 90:
             recommendation['status'] = '🟡 YELLOW (Close to Goal)'
             recommendation['recommendation'] = f'Close to target. Adding 1 agent could help secure {target_al}%.'
-        elif predicted_al >= 80:
+        elif predicted_al >= 85:
             recommendation['status'] = '🟠 ORANGE (At Risk)'
             recommendation['recommendation'] = f'Add {int(recommendation["agents_deficit"])} agent(s) to reach {target_al}%.'
         else:
@@ -194,11 +193,12 @@ class CallCenterRosterOptimizer:
             if agent_count < 1: 
                 continue
 
-            al, cap = self.predict_al(forecasted_calls, agent_count, aht_seconds)
+            al, cap, answered = self.predict_al(forecasted_calls, agent_count, aht_seconds)
             scenarios.append({
                 'Agent Change': f'{agent_change:+d}',
                 'Agents Scheduled': agent_count,
                 'Capacity': cap,
+                'Answered Calls': answered,
                 'Predicted AL': f'{al}%',
                 'Status': '✅ Meet Goal' if al >= target_al else '⚠️ Below Goal'
             })
@@ -227,7 +227,7 @@ class CallCenterRosterOptimizer:
 
                 forecasted_calls = analysis_data['hourly_volume'].get(hour, 0)
                 if forecasted_calls > 0:
-                    predicted_al, capacity = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
+                    predicted_al, capacity, answered = self.predict_al(forecasted_calls, agents_at_hour, self.AVERAGE_HANDLING_TIME_SECONDS)
 
                     key = f"{day}_{hour}"
                     hourly_al_results[key] = {
@@ -236,6 +236,7 @@ class CallCenterRosterOptimizer:
                         'agents': agents_at_hour,
                         'forecast': forecasted_calls,
                         'capacity': capacity,
+                        'answered': answered,
                         'predicted_al': predicted_al,
                         'status': self.get_al_status(predicted_al)
                     }
@@ -266,9 +267,9 @@ class CallCenterRosterOptimizer:
         """Get status classification for AL value"""
         if al_value >= self.TARGET_AL:
             return "✅ GOOD"
-        elif al_value >= 85:
+        elif al_value >= 90:
             return "🟡 WARNING"
-        elif al_value >= 80:
+        elif al_value >= 85:
             return "🟠 AT RISK"
         else:
             return "🔴 CRITICAL"
@@ -426,25 +427,107 @@ class CallCenterRosterOptimizer:
             'total_daily_calls': 3130
         }
 
-    def generate_roster(self, straight_shifts, split_shifts, analysis_data, manual_splits=None):
-        """Generate optimized roster based on shift preferences with 90% AL target"""
-        try:
-            # Adjust staffing based on 90% AL target
-            adjusted_straight_shifts, adjusted_split_shifts = self.adjust_staffing_for_al_target(
-                straight_shifts, split_shifts, analysis_data
-            )
+    def optimize_roster_for_call_flow(self, analysis_data, available_champions):
+        """Optimize roster based on call flow patterns to achieve 95% AL"""
+        hourly_volume = analysis_data['hourly_volume']
+        peak_hours = analysis_data['peak_hours']
+        
+        # Calculate required agents per hour to achieve 95% AL
+        required_agents_per_hour = {}
+        for hour, calls in hourly_volume.items():
+            required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+        
+        # Create a linear programming problem to optimize shift assignments
+        prob = pulp.LpProblem("RosterOptimization", pulp.LpMinimize)
+        
+        # Decision variables: which champion works which shift on which day
+        shifts = self.shift_patterns
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        # Create variables
+        x = pulp.LpVariable.dicts("assign", 
+                                 ((champ['name'], day, shift_idx) 
+                                  for champ in available_champions 
+                                  for day in days 
+                                  for shift_idx in range(len(shifts))),
+                                 cat='Binary')
+        
+        # Objective: Minimize the maximum deviation from required agents
+        max_deviation = pulp.LpVariable("max_deviation", lowBound=0, cat='Continuous')
+        
+        # Add constraints to minimize maximum deviation
+        for hour in self.operation_hours:
+            agents_at_hour = pulp.lpSum([
+                x[champ['name'], day, shift_idx] 
+                for champ in available_champions 
+                for day in days 
+                for shift_idx, shift in enumerate(shifts)
+                if self.is_hour_in_shift(hour, shift)
+            ])
             
-            total_champions = adjusted_straight_shifts + adjusted_split_shifts
-            champions_to_use = self.get_available_champions(analysis_data.get('leave_data', {}))[:total_champions]
-
-            roster_data = []
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
+            # Constraint: agents at hour should be close to required
+            prob += agents_at_hour >= required_agents_per_hour[hour] - max_deviation
+            prob += agents_at_hour <= required_agents_per_hour[hour] + max_deviation
+        
+        # Each champion works at most one shift per day
+        for champ in available_champions:
             for day in days:
-                day_roster = self.generate_daily_roster(day, champions_to_use, adjusted_straight_shifts, adjusted_split_shifts, analysis_data, manual_splits)
-                roster_data.extend(day_roster)
+                prob += pulp.lpSum([x[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))]) <= 1
+        
+        # Each champion works 5 days per week
+        for champ in available_champions:
+            prob += pulp.lpSum([x[champ['name'], day, shift_idx] for day in days for shift_idx in range(len(shifts))]) == 5
+        
+        # Female champions don't work late shifts (after 8 PM)
+        for champ in available_champions:
+            if champ['gender'] == 'F':
+                for day in days:
+                    for shift_idx, shift in enumerate(shifts):
+                        if shift['times'][-1] >= 20:  # Ends at 8 PM or later
+                            prob += x[champ['name'], day, shift_idx] == 0
+        
+        # Solve the problem
+        prob += max_deviation  # Minimize the maximum deviation
+        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+        
+        # Extract the solution
+        roster_data = []
+        for champ in available_champions:
+            for day in days:
+                for shift_idx in range(len(shifts)):
+                    if pulp.value(x[champ['name'], day, shift_idx]) == 1:
+                        shift = shifts[shift_idx]
+                        roster_data.append({
+                            'Day': day,
+                            'Champion': champ['name'],
+                            'Primary Language': champ['primary_lang'].upper(),
+                            'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                            'Shift Type': 'Split' if shift['type'] == 'split' else 'Straight',
+                            'Start Time': shift['display'],
+                            'End Time': f"{shift['times'][-1]:02d}:00",
+                            'Duration': f'{shift["hours"]} hours',
+                            'Calls/Hour Capacity': champ['calls_per_hour'],
+                            'Can Split': 'Yes' if champ['can_split'] else 'No',
+                            'Gender': champ['gender']
+                        })
+        
+        return pd.DataFrame(roster_data)
 
-            roster_df = pd.DataFrame(roster_data)
+    def is_hour_in_shift(self, hour, shift):
+        """Check if an hour is within a shift's working hours"""
+        if shift['type'] == 'straight':
+            return shift['times'][0] <= hour < shift['times'][1]
+        else:  # split shift
+            return (shift['times'][0] <= hour < shift['times'][1]) or (shift['times'][2] <= hour < shift['times'][3])
+
+    def generate_roster(self, analysis_data, manual_splits=None):
+        """Generate optimized roster based on call flow patterns with 95% AL target"""
+        try:
+            available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
+            
+            # Use optimization to assign shifts based on call flow
+            roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions)
+            
             roster_df = self.apply_special_rules(roster_df)
 
             if manual_splits:
@@ -458,29 +541,6 @@ class CallCenterRosterOptimizer:
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
             return None, None
-
-    def adjust_staffing_for_al_target(self, straight_shifts, split_shifts, analysis_data):
-        """Adjust staffing levels to ensure 90% AL target"""
-        # Calculate required staffing for 90% AL
-        peak_hour_volume = max(analysis_data['hourly_volume'].values())
-        agents_needed = self.agents_needed_for_target(peak_hour_volume, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
-        
-        # Calculate current staffing
-        current_staffing = straight_shifts + split_shifts
-        
-        # Increase staffing if needed to meet 90% AL target
-        if agents_needed > current_staffing:
-            additional_staff = agents_needed - current_staffing
-            # Distribute additional staff between straight and split shifts
-            straight_increase = int(additional_staff * 0.7)  # 70% to straight shifts
-            split_increase = additional_staff - straight_increase
-            
-            straight_shifts += straight_increase
-            split_shifts += split_increase
-            
-            st.info(f"Increased staffing from {current_staffing} to {straight_shifts + split_shifts} to meet 90% AL target")
-        
-        return straight_shifts, split_shifts
 
     def get_available_champions(self, leave_data):
         """Filter out champions who are on leave"""
@@ -500,71 +560,6 @@ class CallCenterRosterOptimizer:
                 available_champs.append(champ)
         
         return available_champs
-
-    def generate_daily_roster(self, day, champions, straight_shifts, split_shifts, analysis_data, manual_splits=None):
-        """Generate roster for a single day with specific shift requirements"""
-        daily_roster = []
-
-        # Straight shifts (9 hours continuous)
-        straight_start_times = [7, 8, 9, 10, 11]
-        straight_counts = [4, 4, 4, 3, 3]  # Distribution for 18 straight shifts
-
-        straight_idx = 0
-        for i, champ in enumerate(champions[:straight_shifts]):
-            # Get the next available start time based on our distribution
-            while straight_counts[straight_idx % len(straight_counts)] <= 0:
-                straight_idx += 1
-                
-            start_time = straight_start_times[straight_idx % len(straight_start_times)]
-            straight_counts[straight_idx % len(straight_counts)] -= 1
-            straight_idx += 1
-            
-            end_time = start_time + 9
-
-            daily_roster.append({
-                'Day': day,
-                'Champion': champ['name'],
-                'Primary Language': champ['primary_lang'].upper(),
-                'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                'Shift Type': 'Straight',
-                'Start Time': f"{start_time:02d}:00 to {end_time:02d}:00",
-                'End Time': f"{end_time:02d}:00",
-                'Duration': '9 hours',
-                'Calls/Hour Capacity': champ['calls_per_hour'],
-                'Can Split': 'Yes' if champ['can_split'] else 'No'
-            })
-
-        # Split shifts with specific requirements - only 5 champions
-        split_champs = champions[straight_shifts:straight_shifts + split_shifts]
-        
-        # Pre-select the best 5 split shift champions based on capacity and language skills
-        if len(split_champs) > 5:
-            # Sort by capacity and select top 5
-            split_champs = sorted(split_champs, key=lambda x: x['calls_per_hour'], reverse=True)[:5]
-
-        # Apply specific shift requirements for the 5 split shifts
-        for i, champ in enumerate(split_champs):
-            if i < 2:  # First 2 split shifts: 7-12 & 4-9 (covers morning peak and evening spike)
-                pattern = self.split_shift_patterns[0]
-            elif i < 4:  # Next 2 split shifts: 10-3 & 5-9 (covers late morning and evening)
-                pattern = self.split_shift_patterns[2]
-            else:  # Last split shift: 12-9 (covers afternoon through evening peak)
-                pattern = self.split_shift_patterns[3]
-
-            daily_roster.append({
-                'Day': day,
-                'Champion': champ['name'],
-                'Primary Language': champ['primary_lang'].upper(),
-                'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                'Shift Type': 'Split',
-                'Start Time': pattern['display'],
-                'End Time': f"{pattern['times'][-1]:02d}:00",
-                'Duration': '9 hours (with break)',
-                'Calls/Hour Capacity': champ['calls_per_hour'],
-                'Can Split': 'Yes' if champ['can_split'] else 'No'
-            })
-
-        return daily_roster
 
     def calculate_coverage(self, roster_df, analysis_data):
         """Calculate coverage metrics"""
@@ -847,10 +842,10 @@ class CallCenterRosterOptimizer:
         roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
 
         for idx in roster_df[revathi_mask].index:
-            pattern = self.split_shift_patterns[0]  # 7-12 & 4-9 pattern
+            pattern = self.shift_patterns[6]  # 7-12 & 4-9 pattern
             roster_df.at[idx, 'Start Time'] = pattern['display']
             roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
-            roster_df.at[idx, 'Duration'] = '9 hours (with break)'
+            roster_df.at[idx, 'Duration'] = '9.5 hours (with break)'
 
         return roster_df
 
@@ -996,7 +991,7 @@ class CallCenterRosterOptimizer:
         return validation_results
 
     def validate_al_target(self, roster_df, analysis_data):
-        """Validate that we achieve at least 90% AL target"""
+        """Validate that we achieve at least 95% AL target"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         validation_results = {}
 
@@ -1069,40 +1064,18 @@ def main():
     # Sidebar configuration
     with st.sidebar:
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-        st.header("⚙️ Shift Configuration")
+        st.header("⚙️ Configuration")
 
-        st.subheader("Shift Type Allocation")
-        total_champs = len(optimizer.champions)
-        straight_shifts = st.slider(
-            "Regular Shifts (9 hours continuous)", 
-            min_value=0, 
-            max_value=total_champs, 
-            value=18,
-            help="Number of champions working straight 9-hour shifts"
-        )
-
-        split_shifts = st.slider(
-            "Split Shifts (with break)", 
-            min_value=0, 
-            max_value=total_champs, 
-            value=5,
-            help="Number of champions working split shifts with afternoon break"
-        )
-
-        if straight_shifts + split_shifts > total_champs:
-            st.warning(f"⚠️ Only {total_champs} champions available! Reducing split shifts...")
-            split_shifts = total_champs - straight_shifts
-
-        st.metric("Total Champions Used", f"{straight_shifts + split_shifts}/{total_champs}")
+        st.subheader("Target Answer Level")
+        st.info(f"Current target: {optimizer.TARGET_AL}% (Minimum: {optimizer.MIN_AL}%)")
 
         # NEW: Split shift active champions selection
         st.subheader("Active Split Shift Champions")
-        min_split_champs = max(4, split_shifts)
         active_split_champs = st.slider(
             "Minimum Active Split Shift Champions per Day",
-            min_value=4,
-            max_value=split_shifts,
-            value=min(4, split_shifts),  # Set to 4 to ensure coverage when one is off
+            min_value=3,
+            max_value=8,
+            value=4,
             help="Set the minimum number of split shift champions that must be active each day"
         )
 
@@ -1156,14 +1129,14 @@ def main():
         selected_day = st.selectbox("Select Day", days)
 
         pattern_options = [f"{pattern['name']} ({pattern['display']})" 
-                        for pattern in optimizer.split_shift_patterns]
+                        for pattern in optimizer.shift_patterns if pattern['type'] == 'split']
         selected_pattern_idx = st.selectbox("Select Split Shift Pattern", range(len(pattern_options)), format_func=lambda x: pattern_options[x])
 
         if st.button("➕ Add Manual Split Assignment"):
             new_assignment = {
                 'champion': selected_champ,
                 'day': selected_day,
-                'pattern': optimizer.split_shift_patterns[selected_pattern_idx]
+                'pattern': [p for p in optimizer.shift_patterns if p['type'] == 'split'][selected_pattern_idx]
             }
 
             if not any(a['champion'] == selected_champ and a['day'] == selected_day for a in st.session_state.manual_splits):
@@ -1196,6 +1169,7 @@ def main():
         - ⏱️ **AHT:** 3 minutes 22 seconds (202 seconds)
         - 🎯 **AL Target:** {optimizer.TARGET_AL}% Answer Level (Minimum: {optimizer.MIN_AL}%)
         - 👥 **Late Hour Coverage:** Minimum 3 mid-shift + 3 split-shift agents during 5 PM - 9 PM
+        - 👩 **Female Champions:** Not assigned to shifts ending after 8 PM
         """)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1204,12 +1178,6 @@ def main():
 
     with col1:
         st.header("📈 Current Configuration")
-
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.metric("Regular Shifts", straight_shifts)
-        st.metric("Split Shifts", split_shifts)
-        st.metric("Total Coverage", f"{straight_shifts + split_shifts} champions")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         if uploaded_file:
             st.success("✅ Data file uploaded successfully!")
@@ -1227,6 +1195,14 @@ def main():
                 st.metric("Daily Call Volume", f"{analysis_data['total_daily_calls']:,.0f}")
                 st.metric("Weekly Call Volume", f"{analysis_data['total_daily_calls'] * 7:,.0f}")
                 st.metric("Peak Hours", ", ".join([f"{h}:00" for h in analysis_data['peak_hours']]))
+                
+                # Show hourly call volume chart
+                hourly_df = pd.DataFrame({
+                    'Hour': list(analysis_data['hourly_volume'].keys()),
+                    'Calls': list(analysis_data['hourly_volume'].values())
+                })
+                fig = px.bar(hourly_df, x='Hour', y='Calls', title='Hourly Call Volume')
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.session_state.analysis_data = {
                 'hourly_volume': {
@@ -1244,10 +1220,8 @@ def main():
         st.header("🎯 Generate Roster")
 
         if st.button("🚀 Generate Optimized Roster", type="primary", use_container_width=True):
-            with st.spinner("Generating optimized roster for 90% AL target..."):
+            with st.spinner("Generating optimized roster for 95% AL target..."):
                 roster_df, week_offs = optimizer.generate_roster(
-                    straight_shifts, 
-                    split_shifts, 
                     st.session_state.analysis_data,
                     st.session_state.manual_splits
                 )
@@ -1297,6 +1271,52 @@ def main():
             st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+
+        # Display hourly AL analysis
+        st.markdown('<div class="section-header"><h2>📈 Hourly Answer Level Analysis</h2></div>', unsafe_allow_html=True)
+        
+        if st.session_state.hourly_al_results:
+            hourly_al_df = pd.DataFrame.from_dict(st.session_state.hourly_al_results, orient='index')
+            hourly_al_df = hourly_al_df.reset_index(drop=True)
+            
+            # Create a heatmap of AL by day and hour
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            al_heatmap_data = []
+            
+            for day in days:
+                for hour in optimizer.operation_hours:
+                    key = f"{day}_{hour}"
+                    if key in st.session_state.hourly_al_results:
+                        result = st.session_state.hourly_al_results[key]
+                        al_heatmap_data.append({
+                            'Day': day,
+                            'Hour': hour,
+                            'AL': result['predicted_al'],
+                            'Agents': result['agents'],
+                            'Calls': result['forecast'],
+                            'Answered': result['answered']
+                        })
+            
+            al_heatmap_df = pd.DataFrame(al_heatmap_data)
+            
+            if not al_heatmap_df.empty:
+                # Pivot for heatmap
+                pivot_df = al_heatmap_df.pivot(index='Hour', columns='Day', values='AL')
+                
+                # Create heatmap
+                fig = px.imshow(pivot_df, 
+                               labels=dict(x="Day", y="Hour", color="Answer Level"),
+                               x=days,
+                               y=[f"{h}:00" for h in pivot_df.index],
+                               title="Hourly Answer Level (%) by Day",
+                               color_continuous_scale="RdYlGn",
+                               range_color=[80, 100])
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Show detailed table
+                with st.expander("View Detailed Hourly Analysis"):
+                    st.dataframe(al_heatmap_df, use_container_width=True)
 
         # Display split shift coverage validation
         st.markdown('<div class="section-header"><h2>✅ Split Shift Coverage Validation</h2></div>', unsafe_allow_html=True)
