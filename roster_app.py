@@ -342,13 +342,29 @@ class CallCenterRosterOptimizer:
     def analyze_excel_data(self, uploaded_file):
         """Analyze uploaded Excel file for call volume and leave data"""
         try:
-            xls = pd.ExcelFile(uploaded_file)
+            # Try to read with openpyxl first (for xlsx files)
+            try:
+                xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
+            except:
+                # If that fails, try with xlrd (for xls files)
+                try:
+                    xls = pd.ExcelFile(uploaded_file, engine='xlrd')
+                except:
+                    # If both fail, install xlrd and try again
+                    import subprocess
+                    import sys
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "xlrd"])
+                    xls = pd.ExcelFile(uploaded_file, engine='xlrd')
+                    
             analysis_data = {}
             leave_data = {}
 
             # Process call volume data
             if 'Hourly_Data' in xls.sheet_names:
-                df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data')
+                try:
+                    df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data', engine='openpyxl')
+                except:
+                    df = pd.read_excel(uploaded_file, sheet_name='Hourly_Data', engine='xlrd')
 
                 if 'Hour' in df.columns and 'Calls' in df.columns:
                     hourly_volume = dict(zip(df['Hour'], df['Calls']))
@@ -362,7 +378,10 @@ class CallCenterRosterOptimizer:
                     }
 
             elif 'Daily_Data' in xls.sheet_names:
-                df = pd.read_excel(uploaded_file, sheet_name='Daily_Data')
+                try:
+                    df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='openpyxl')
+                except:
+                    df = pd.read_excel(uploaded_file, sheet_name='Daily_Data', engine='xlrd')
 
                 if 'Total_Calls' in df.columns:
                     avg_daily_calls = df['Total_Calls'].mean()
@@ -389,7 +408,11 @@ class CallCenterRosterOptimizer:
 
             # Process leave data
             if 'Leave_Data' in xls.sheet_names:
-                df = pd.read_excel(uploaded_file, sheet_name='Leave_Data')
+                try:
+                    df = pd.read_excel(uploaded_file, sheet_name='Leave_Data', engine='openpyxl')
+                except:
+                    df = pd.read_excel(uploaded_file, sheet_name='Leave_Data', engine='xlrd')
+                    
                 if 'Champion' in df.columns:
                     for _, row in df.iterrows():
                         champion = row['Champion']
@@ -1007,7 +1030,7 @@ class CallCenterRosterOptimizer:
                     hours_worked = 0
                     for shift in shifts:
                         times = shift.split(' to ')
-                        start_hour = int(times[0].split(':')[0])
+                        start_hour = int(times[极速飞艇开奖结果记录，澳洲幸运10是官方的吗，极速飞艇开奖直播现场0].split(':')[0])
                         end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
 
@@ -1294,7 +1317,7 @@ def main():
                             'AL': result['predicted_al'],
                             'Agents': result['agents'],
                             'Calls': result['forecast'],
-                            'Answered': result['answered']
+                            'Answered': result.get('answered', 0)  # Use get() to avoid KeyError
                         })
             
             al_heatmap_df = pd.DataFrame(al_heatmap_data)
