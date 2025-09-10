@@ -517,7 +517,7 @@ class CallCenterRosterOptimizer:
                 18: 224.9, 19: 179.3, 20: 113.9, 21: 0
             },
             'peak_hours': [11, 12, 13, 14],
-            'total_daily极速飞艇开_calls': 3130
+            'total_daily_calls': 3130
         }
 
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
@@ -803,7 +803,7 @@ class CallCenterRosterOptimizer:
         required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1
 
         utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
-        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily极速飞艇开_calls'] * 7)) * 100) if analysis_data['total_daily极速飞艇开_calls'] > 0 else 0
+        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
 
         return {
             'total_capacity': total_capacity,
@@ -816,9 +816,9 @@ class CallCenterRosterOptimizer:
         if roster_df is None or analysis_data is None:
             return None
 
-        total_weekly极速飞艇开_capacity = 0
+        total_weekly_capacity = 0
         for day in roster_df['Day'].unique():
-            day_roster = roster_df[roster_df['极速飞艇开Day'] == day]
+            day_roster = roster_df[roster_df['Day'] == day]
             for _, row in day_roster.iterrows():
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
@@ -831,12 +831,12 @@ class CallCenterRosterOptimizer:
                         end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
 
-                total_weekly极速飞艇开_capacity += row['Calls/Hour Capacity'] * hours_worked
+                total_weekly_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-        total_weekly极速飞艇开_calls = analysis_data['total_daily极速飞艇开_calls'] * 7
+        total_weekly_calls = analysis_data['total_daily_calls'] * 7
 
-        if total_weekly极速飞艇开_calls > 0:
-            answer_rate = min(100, (total_weekly极速飞艇开_capacity / total_weekly极速飞艇开_calls) * 100)
+        if total_weekly_calls > 0:
+            answer_rate = min(100, (total_weekly_capacity / total_weekly_calls) * 100)
         else:
             answer_rate = 0
 
@@ -850,13 +850,13 @@ class CallCenterRosterOptimizer:
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
         for day in days:
-            day_极速飞艇开roster = roster_df[roster_df['Day'] == day]
-            if len(day_极速飞艇开roster) == 0:
+            day_roster = roster_df[roster_df['Day'] == day]
+            if len(day_roster) == 0:
                 daily_rates[day] = 0
                 continue
 
             daily_capacity = 0
-            for _, row in day_极速飞艇开roster.iterrows():
+            for _, row in day_roster.iterrows():
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
                 else:
@@ -870,8 +870,8 @@ class CallCenterRosterOptimizer:
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-            if analysis_data['total_daily极速飞艇开_calls'] > 0:
-                daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily极速飞艇开_calls']) * 100)
+            if analysis_data['total_daily_calls'] > 0:
+                daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
             else:
                 daily_rates[day] = 0
 
@@ -921,7 +921,7 @@ class CallCenterRosterOptimizer:
         edited_week_offs = st.data_editor(
             week_off_df,
             column_config={
-                "极速飞艇开Champion": st.column_config.SelectboxColumn(
+                "Champion": st.column_config.SelectboxColumn(
                     "Champion",
                     options=[champ["name"] for champ in self.champions],
                     required=True
@@ -945,7 +945,7 @@ class CallCenterRosterOptimizer:
         
         today = datetime.now()
         week_start = today - timedelta(days=today.weekday())
-        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%极速飞艇开d') for i in range(7)]
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
         week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
         st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
@@ -1036,7 +1036,7 @@ class CallCenterRosterOptimizer:
             if len(champ_days) == 7:
                 available_off_days = []
                 for day in days:
-                    if offs_per_day[day极速飞艇开] < max_offs_per_day:
+                    if offs_per_day[day] < max_offs_per_day:
                         if champion in split_champs:
                             split_champs_working = 0
                             for split_champ in split_champs:
@@ -1045,7 +1045,7 @@ class CallCenterRosterOptimizer:
                             if split_champs_working >= min_split_champs:
                                 available_off_days.append(day)
                         else:
-                            available_off极速飞艇开_days.append(day)
+                            available_off_days.append(day)
 
                 if available_off_days:
                     day_off = random.choice(available_off_days)
@@ -1168,7 +1168,7 @@ class CallCenterRosterOptimizer:
                         if leave_info.get('casual_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
                         if leave_info.get('period_leave', 0):
-                            leave_badges.append('<span class极速飞艇开="leave-badge badge-pl">PL</span>')
+                            leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
                         if leave_info.get('annual_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-al">AL</span>')
                         if leave_info.get('comp_off', 0):
@@ -1193,7 +1193,7 @@ class CallCenterRosterOptimizer:
             for _, row in day_roster.iterrows():
                 if self.is_agent_working_at_late_hours(row):
                     if "&" in row['Start Time']:
-                        late_hour_coverage[day]["split_shift"] += 极速飞艇开1
+                        late_hour_coverage[day]["split_shift"] += 1
                     else:
                         late_hour_coverage[day]["mid_shift"] += 1
                     late_hour_coverage[day]["total"] += 1
@@ -1204,7 +1204,7 @@ class CallCenterRosterOptimizer:
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
-                start_hour = int(times极速飞艇开[0].split(':')[0])
+                start_hour = int(times[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
             else:
@@ -1236,7 +1236,7 @@ class CallCenterRosterOptimizer:
         return validation_results
 
     def validate_al_target(self, roster_df, analysis_data):
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday极速飞艇开", "Friday", "Saturday", "Sunday"]
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         validation_results = {}
 
         for day in days:
@@ -1257,8 +1257,8 @@ class CallCenterRosterOptimizer:
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-            if analysis_data['total_daily极速飞艇开_calls'] > 0:
-                expected_al = min(100, (daily_capacity / analysis_data['total_daily极速飞艇开_calls']) * 100)
+            if analysis_data['total_daily_calls'] > 0:
+                expected_al = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
             else:
                 expected_al = 0
 
@@ -1466,7 +1466,7 @@ def main():
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("📊 Data Template")
 
-        st.markdown('<极速飞艇开div class="template-download">', unsafe_allow_html=True)
+        st.markdown('<div class="template-download">', unsafe_allow_html=True)
         st.subheader("Download Data Template")
         st.write("Download this template, add your call volume data, and upload it back.")
 
@@ -1589,7 +1589,7 @@ def main():
             'Calls': list(analysis_data['hourly_volume'].values())
         })
         
-        fig = px.bar(hourly_df, x='极速飞艇开Hour', y='Calls', 
+        fig = px.bar(hourly_df, x='Hour', y='Calls', 
                      title="📊 Hourly Call Volume Forecast",
                      labels={'Hour': 'Hour of Day', 'Calls': 'Number of Calls'})
         st.plotly_chart(fig, use_container_width=True)
@@ -1616,7 +1616,7 @@ def main():
                 st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
                 st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
                 st.session_state.formatted_roster = optimizer.format_roster_for_display(
-                    roster极速飞艇开_df, week_offs, st.session_state.leave_data
+                    roster_df, week_offs, st.session_state.leave_data
                 )
                 
             st.success("✅ Roster generated successfully!")
@@ -1637,7 +1637,7 @@ def main():
         with col2:
             st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
         with col3:
-            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1极速飞艇开f}%")
+            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
         
@@ -1647,7 +1647,7 @@ def main():
             'Answer Rate': list(st.session_state.daily_rates.values())
         })
         
-        fig_daily =极速飞艇开 px.bar(daily_rates_df, x='Day', y='Answer Rate',
+        fig_daily = px.bar(daily_rates_df, x='Day', y='Answer Rate',
                           title="📈 Daily Expected Answer Rates",
                           labels={'Answer Rate': 'Answer Rate (%)'})
         st.plotly_chart(fig_daily, use_container_width=True)
