@@ -91,6 +91,13 @@ st.markdown("""
     background-color: #ff3366;
     color: white;
 }
+.editor-section {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e9ecef;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,6 +122,7 @@ class CallCenterRosterOptimizer:
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202
+        self.available_languages = ['ka', 'hi', 'te', 'ta', 'en']  # Supported languages
 
     def load_champions(self):
         return [
@@ -147,6 +155,22 @@ class CallCenterRosterOptimizer:
             {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
             {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Maternity"}
         ]
+
+    def update_champion(self, old_name, new_data):
+        """Update champion information"""
+        for i, champ in enumerate(self.champions):
+            if champ['name'] == old_name:
+                self.champions[i] = new_data
+                return True
+        return False
+
+    def add_champion(self, champion_data):
+        """Add a new champion"""
+        self.champions.append(champion_data)
+
+    def delete_champion(self, champion_name):
+        """Delete a champion"""
+        self.champions = [champ for champ in self.champions if champ['name'] != champion_name]
 
     def get_available_languages(self):
         """Get all unique languages from champions"""
@@ -302,6 +326,17 @@ class CallCenterRosterOptimizer:
             'Maternity_Leave': [1 if champ['status'] == 'Maternity' else 0 for champ in self.champions]
         })
 
+        # Add champion data sheet
+        champion_data = pd.DataFrame({
+            'Name': [champ['name'] for champ in self.champions],
+            'Primary_Language': [champ['primary_lang'] for champ in self.champions],
+            'Secondary_Languages': [','.join(champ['secondary_langs']) for champ in self.champions],
+            'Calls_Per_Hour': [champ['calls_per_hour'] for champ in self.champions],
+            'Can_Split': [1 if champ['can_split'] else 0 for champ in self.champions],
+            'Gender': [champ['gender'] for champ in self.champions],
+            'Status': [champ['status'] for champ in self.champions]
+        })
+
         instructions = pd.DataFrame({
             'Instruction': [
                 'INSTRUCTIONS:',
@@ -309,8 +344,18 @@ class CallCenterRosterOptimizer:
                 '2. For best results, use the Hourly_Data sheet with calls per hour',
                 '3. If you only have daily totals, use the Daily_Data sheet',
                 '4. Add leave information in the Leave_Data sheet (0=no leave, 1=on leave)',
-                '5. Save the file and upload it back to the app',
-                '6. The app will analyze your data and generate an optimized roster',
+                '5. Update champion information in the Champion_Data sheet if needed',
+                '6. Save the file and upload it back to the app',
+                '7. The app will analyze your data and generate an optimized roster',
+                '',
+                'CHAMPION_DATA SHEET:',
+                '- Name: Champion name',
+                '- Primary_Language: Primary language code (ka, hi, te, ta, en)',
+                '- Secondary_Languages: Comma-separated secondary languages',
+                '- Calls_Per_Hour: Number of calls per hour capacity',
+                '- Can_Split: 1 if can work split shifts, 0 otherwise',
+                '- Gender: M or F',
+                '- Status: Active or Maternity',
                 '',
                 'HOURLY_DATA SHEET:',
                 '- Hour: Operation hour (7 to 21)',
@@ -336,6 +381,7 @@ class CallCenterRosterOptimizer:
         excel_buffer = BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
+            champion_data.to_excel(writer, sheet_name='Champion_Data', index=False)
             hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
             daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
             leave_data.to_excel(writer, sheet_name='Leave_Data', index=False)
@@ -356,6 +402,32 @@ class CallCenterRosterOptimizer:
                     
             analysis_data = {}
             leave_data = {}
+            updated_champions = False
+
+            # Check for champion data sheet
+            if 'Champion_Data' in xls.sheet_names:
+                try:
+                    df = pd.read_excel(uploaded_file, sheet_name='Champion_Data', engine='openpyxl')
+                except:
+                    df = pd.read_excel(uploaded_file, sheet_name='Champion_Data')
+                
+                if 'Name' in df.columns and 'Primary_Language' in df.columns:
+                    new_champions = []
+                    for _, row in df.iterrows():
+                        champion = {
+                            'name': row['Name'],
+                            'primary_lang': row['Primary_Language'],
+                            'secondary_langs': row['Secondary_Languages'].split(',') if pd.notna(row['Secondary_Languages']) else [],
+                            'calls_per_hour': row['Calls_Per_Hour'],
+                            'can_split': bool(row['Can_Split']),
+                            'gender': row['Gender'],
+                            'status': row['Status']
+                        }
+                        new_champions.append(champion)
+                    
+                    self.champions = new_champions
+                    updated_champions = True
+                    st.success("✅ Champion data updated from Excel file")
 
             if 'Hourly_Data' in xls.sheet_names:
                 try:
@@ -371,7 +443,7 @@ class CallCenterRosterOptimizer:
                     analysis_data = {
                         'hourly_volume': hourly_volume,
                         'peak_hours': peak_hours,
-                        'total_daily极速飞艇开_calls': total_daily_calls
+                        'total_daily_calls': total_daily_calls
                     }
 
             elif 'Daily_Data' in xls.sheet_names:
@@ -426,6 +498,7 @@ class CallCenterRosterOptimizer:
                 analysis_data = self.get_sample_data()
 
             analysis_data['leave_data'] = leave_data
+            analysis_data['champions_updated'] = updated_champions
             return analysis_data
 
         except Exception as e:
@@ -433,6 +506,7 @@ class CallCenterRosterOptimizer:
             st.info("Using sample data instead.")
             sample_data = self.get_sample_data()
             sample_data['leave_data'] = {}
+            sample_data['champions_updated'] = False
             return sample_data
 
     def get_sample_data(self):
@@ -443,7 +517,7 @@ class CallCenterRosterOptimizer:
                 18: 224.9, 19: 179.3, 20: 113.9, 21: 0
             },
             'peak_hours': [11, 12, 13, 14],
-            'total_daily_calls': 3130
+            'total_daily极速飞艇开_calls': 3130
         }
 
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
@@ -729,7 +803,7 @@ class CallCenterRosterOptimizer:
         required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1
 
         utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
-        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
+        expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily极速飞艇开_calls'] * 7)) * 100) if analysis_data['total_daily极速飞艇开_calls'] > 0 else 0
 
         return {
             'total_capacity': total_capacity,
@@ -742,9 +816,9 @@ class CallCenterRosterOptimizer:
         if roster_df is None or analysis_data is None:
             return None
 
-        total_weekly_capacity = 0
+        total_weekly极速飞艇开_capacity = 0
         for day in roster_df['Day'].unique():
-            day_roster = roster_df[roster_df['Day'] == day]
+            day_roster = roster_df[roster_df['极速飞艇开Day'] == day]
             for _, row in day_roster.iterrows():
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
@@ -757,12 +831,12 @@ class CallCenterRosterOptimizer:
                         end_hour = int(times[1].split(':')[0])
                         hours_worked += (end_hour - start_hour)
 
-                total_weekly_capacity += row['Calls/Hour Capacity'] * hours_worked
+                total_weekly极速飞艇开_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-        total_weekly_calls = analysis_data['total_daily_calls'] * 7
+        total_weekly极速飞艇开_calls = analysis_data['total_daily极速飞艇开_calls'] * 7
 
-        if total_weekly_calls > 0:
-            answer_rate = min(100, (total_weekly_capacity / total_weekly_calls) * 100)
+        if total_weekly极速飞艇开_calls > 0:
+            answer_rate = min(100, (total_weekly极速飞艇开_capacity / total_weekly极速飞艇开_calls) * 100)
         else:
             answer_rate = 0
 
@@ -776,13 +850,13 @@ class CallCenterRosterOptimizer:
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
         for day in days:
-            day_roster = roster_df[roster_df['Day'] == day]
-            if len(day_roster) == 0:
+            day_极速飞艇开roster = roster_df[roster_df['Day'] == day]
+            if len(day_极速飞艇开roster) == 0:
                 daily_rates[day] = 0
                 continue
 
             daily_capacity = 0
-            for _, row in day_roster.iterrows():
+            for _, row in day_极速飞艇开roster.iterrows():
                 if row['Shift Type'] == 'Straight':
                     hours_worked = 9
                 else:
@@ -796,8 +870,8 @@ class CallCenterRosterOptimizer:
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-            if analysis_data['total_daily_calls'] > 0:
-                daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+            if analysis_data['total_daily极速飞艇开_calls'] > 0:
+                daily_rates[day] = min(100, (daily_capacity / analysis_data['total_daily极速飞艇开_calls']) * 100)
             else:
                 daily_rates[day] = 0
 
@@ -847,7 +921,7 @@ class CallCenterRosterOptimizer:
         edited_week_offs = st.data_editor(
             week_off_df,
             column_config={
-                "Champion": st.column_config.SelectboxColumn(
+                "极速飞艇开Champion": st.column_config.SelectboxColumn(
                     "Champion",
                     options=[champ["name"] for champ in self.champions],
                     required=True
@@ -871,7 +945,7 @@ class CallCenterRosterOptimizer:
         
         today = datetime.now()
         week_start = today - timedelta(days=today.weekday())
-        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%极速飞艇开d') for i in range(7)]
         week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
         st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
@@ -962,7 +1036,7 @@ class CallCenterRosterOptimizer:
             if len(champ_days) == 7:
                 available_off_days = []
                 for day in days:
-                    if offs_per_day[day] < max_offs_per_day:
+                    if offs_per_day[day极速飞艇开] < max_offs_per_day:
                         if champion in split_champs:
                             split_champs_working = 0
                             for split_champ in split_champs:
@@ -971,7 +1045,7 @@ class CallCenterRosterOptimizer:
                             if split_champs_working >= min_split_champs:
                                 available_off_days.append(day)
                         else:
-                            available_off_days.append(day)
+                            available_off极速飞艇开_days.append(day)
 
                 if available_off_days:
                     day_off = random.choice(available_off_days)
@@ -1094,7 +1168,7 @@ class CallCenterRosterOptimizer:
                         if leave_info.get('casual_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
                         if leave_info.get('period_leave', 0):
-                            leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
+                            leave_badges.append('<span class极速飞艇开="leave-badge badge-pl">PL</span>')
                         if leave_info.get('annual_leave', 0):
                             leave_badges.append('<span class="leave-badge badge-al">AL</span>')
                         if leave_info.get('comp_off', 0):
@@ -1119,7 +1193,7 @@ class CallCenterRosterOptimizer:
             for _, row in day_roster.iterrows():
                 if self.is_agent_working_at_late_hours(row):
                     if "&" in row['Start Time']:
-                        late_hour_coverage[day]["split_shift"] += 1
+                        late_hour_coverage[day]["split_shift"] += 极速飞艇开1
                     else:
                         late_hour_coverage[day]["mid_shift"] += 1
                     late_hour_coverage[day]["total"] += 1
@@ -1130,7 +1204,7 @@ class CallCenterRosterOptimizer:
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
-                start_hour = int(times[0].split(':')[0])
+                start_hour = int(times极速飞艇开[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
             else:
@@ -1162,7 +1236,7 @@ class CallCenterRosterOptimizer:
         return validation_results
 
     def validate_al_target(self, roster_df, analysis_data):
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday极速飞艇开", "Friday", "Saturday", "Sunday"]
         validation_results = {}
 
         for day in days:
@@ -1183,8 +1257,8 @@ class CallCenterRosterOptimizer:
 
                 daily_capacity += row['Calls/Hour Capacity'] * hours_worked
 
-            if analysis_data['total_daily_calls'] > 0:
-                expected_al = min(100, (daily_capacity / analysis_data['total_daily_calls']) * 100)
+            if analysis_data['total_daily极速飞艇开_calls'] > 0:
+                expected_al = min(100, (daily_capacity / analysis_data['total_daily极速飞艇开_calls']) * 100)
             else:
                 expected_al = 0
 
@@ -1194,6 +1268,124 @@ class CallCenterRosterOptimizer:
             }
 
         return validation_results
+
+    def show_champion_editor(self):
+        """Show champion editor interface"""
+        st.markdown('<div class="editor-section">', unsafe_allow_html=True)
+        st.subheader("👥 Champion Management")
+        
+        # Convert champions to DataFrame for editing
+        champ_data = []
+        for champ in self.champions:
+            champ_data.append({
+                'Name': champ['name'],
+                'Primary Language': champ['primary_lang'],
+                'Secondary Languages': ', '.join(champ['secondary_langs']),
+                'Calls Per Hour': champ['calls_per_hour'],
+                'Can Split': champ['can_split'],
+                'Gender': champ['gender'],
+                'Status': champ['status']
+            })
+        
+        champ_df = pd.DataFrame(champ_data)
+        
+        # Editable data editor
+        edited_champ_df = st.data_editor(
+            champ_df,
+            column_config={
+                "Name": st.column_config.TextColumn("Name", required=True),
+                "Primary Language": st.column_config.SelectboxColumn(
+                    "Primary Language",
+                    options=self.available_languages,
+                    required=True
+                ),
+                "Secondary Languages": st.column_config.TextColumn(
+                    "Secondary Languages",
+                    help="Comma-separated language codes (ka, hi, te, ta, en)"
+                ),
+                "Calls Per Hour": st.column_config.NumberColumn(
+                    "Calls Per Hour",
+                    min_value=1,
+                    max_value=20,
+                    required=True
+                ),
+                "Can Split": st.column_config.CheckboxColumn("Can Split"),
+                "Gender": st.column_config.SelectboxColumn(
+                    "Gender",
+                    options=["M", "F"],
+                    required=True
+                ),
+                "Status": st.column_config.SelectboxColumn(
+                    "Status",
+                    options=["Active", "Maternity"],
+                    required=True
+                )
+            },
+            num_rows="dynamic",
+            use_container_width=True
+        )
+        
+        # Add new champion section
+        st.subheader("➕ Add New Champion")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            new_name = st.text_input("Name")
+            new_primary_lang = st.selectbox("Primary Language", self.available_languages)
+            new_secondary_langs = st.text_input("Secondary Languages", help="Comma-separated (e.g., hi,te,ta)")
+        
+        with col2:
+            new_calls_per_hour = st.number_input("Calls Per Hour", min_value=1, max_value=20, value=12)
+            new_can_split = st.checkbox("Can Split")
+            new_gender = st.selectbox("Gender", ["M", "F"])
+        
+        with col3:
+            new_status = st.selectbox("Status", ["Active", "Maternity"])
+            if st.button("Add Champion"):
+                if new_name:
+                    new_champ = {
+                        'name': new_name,
+                        'primary_lang': new_primary_lang,
+                        'secondary_langs': [lang.strip() for lang in new_secondary_langs.split(',')] if new_secondary_langs else [],
+                        'calls_per_hour': new_calls_per_hour,
+                        'can_split': new_can_split,
+                        'gender': new_gender,
+                        'status': new_status
+                    }
+                    self.add_champion(new_champ)
+                    st.success(f"Added champion: {new_name}")
+                    st.rerun()
+                else:
+                    st.error("Please enter a name for the champion")
+        
+        # Update champions from edited data
+        if st.button("💾 Save Champion Changes"):
+            new_champions = []
+            for _, row in edited_champ_df.iterrows():
+                champion = {
+                    'name': row['Name'],
+                    'primary_lang': row['Primary Language'],
+                    'secondary_langs': [lang.strip() for lang in row['Secondary Languages'].split(',')] if pd.notna(row['Secondary Languages']) else [],
+                    'calls_per_hour': row['Calls Per Hour'],
+                    'can_split': row['Can Split'],
+                    'gender': row['Gender'],
+                    'status': row['Status']
+                }
+                new_champions.append(champion)
+            
+            self.champions = new_champions
+            st.success("Champion data saved successfully!")
+            st.rerun()
+        
+        # Delete champion section
+        st.subheader("🗑️ Delete Champion")
+        delete_name = st.selectbox("Select champion to delete", [champ['name'] for champ in self.champions])
+        if st.button("Delete Champion", type="secondary"):
+            self.delete_champion(delete_name)
+            st.success(f"Deleted champion: {delete_name}")
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Initialize session state
 def initialize_session_state():
@@ -1223,6 +1415,8 @@ def initialize_session_state():
         st.session_state.leave_data = {}
     if 'selected_languages' not in st.session_state:
         st.session_state.selected_languages = []
+    if 'show_champion_editor' not in st.session_state:
+        st.session_state.show_champion_editor = False
 
 # Main application
 def main():
@@ -1272,7 +1466,7 @@ def main():
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("📊 Data Template")
 
-        st.markdown('<div class="template-download">', unsafe_allow_html=True)
+        st.markdown('<极速飞艇开div class="template-download">', unsafe_allow_html=True)
         st.subheader("Download Data Template")
         st.write("Download this template, add your call volume data, and upload it back.")
 
@@ -1356,16 +1550,18 @@ def main():
         
         st.subheader("Language Distribution")
         lang_dist = {}
-        # Add this to complete the language distribution section
-        lang_counts = {}
         for champ in optimizer.champions:
             if champ['primary_lang']:
-                lang_counts[champ['primary_lang']] = lang_counts.get(champ['primary_lang'], 0) + 1
+                lang_dist[champ['primary_lang']] = lang_dist.get(champ['primary_lang'], 0) + 1
             for lang in champ['secondary_langs']:
-                lang_counts[lang] = lang_counts.get(lang, 0) + 1
+                lang_dist[lang] = lang_dist.get(lang, 0) + 1
         
-        for lang, count in sorted(lang_counts.items()):
+        for lang, count in sorted(lang_dist.items()):
             st.write(f"{lang.upper()}: {count}")
+        
+        # Champion editor toggle
+        if st.button("👥 Edit Champions"):
+            st.session_state.show_champion_editor = not st.session_state.show_champion_editor
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1393,7 +1589,7 @@ def main():
             'Calls': list(analysis_data['hourly_volume'].values())
         })
         
-        fig = px.bar(hourly_df, x='Hour', y='Calls', 
+        fig = px.bar(hourly_df, x='极速飞艇开Hour', y='Calls', 
                      title="📊 Hourly Call Volume Forecast",
                      labels={'Hour': 'Hour of Day', 'Calls': 'Number of Calls'})
         st.plotly_chart(fig, use_container_width=True)
@@ -1420,10 +1616,14 @@ def main():
                 st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
                 st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
                 st.session_state.formatted_roster = optimizer.format_roster_for_display(
-                    roster_df, week_offs, st.session_state.leave_data
+                    roster极速飞艇开_df, week_offs, st.session_state.leave_data
                 )
                 
             st.success("✅ Roster generated successfully!")
+    
+    # Show champion editor if toggled
+    if st.session_state.show_champion_editor:
+        optimizer.show_champion_editor()
     
     # Display results if available
     if st.session_state.roster_df is not None:
@@ -1437,7 +1637,7 @@ def main():
         with col2:
             st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
         with col3:
-            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
+            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1极速飞艇开f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
         
@@ -1447,7 +1647,7 @@ def main():
             'Answer Rate': list(st.session_state.daily_rates.values())
         })
         
-        fig_daily = px.bar(daily_rates_df, x='Day', y='Answer Rate',
+        fig_daily =极速飞艇开 px.bar(daily_rates_df, x='Day', y='Answer Rate',
                           title="📈 Daily Expected Answer Rates",
                           labels={'Answer Rate': 'Answer Rate (%)'})
         st.plotly_chart(fig_daily, use_container_width=True)
@@ -1550,6 +1750,7 @@ def main():
             - **Hourly_Data**: Add your call volume by hour (7-21)
             - **Daily_Data**: Add daily totals and peak information
             - **Leave_Data**: Mark which agents are on leave
+            - **Champion_Data**: Update champion names and languages
             """)
             
         with col2:
