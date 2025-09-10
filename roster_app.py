@@ -1356,3 +1356,210 @@ def main():
         
         st.subheader("Language Distribution")
         lang_dist = {}
+        # Add this to complete the language distribution section
+        lang_counts = {}
+        for champ in optimizer.champions:
+            if champ['primary_lang']:
+                lang_counts[champ['primary_lang']] = lang_counts.get(champ['primary_lang'], 0) + 1
+            for lang in champ['secondary_langs']:
+                lang_counts[lang] = lang_counts.get(lang, 0) + 1
+        
+        for lang, count in sorted(lang_counts.items()):
+            st.write(f"{lang.upper()}: {count}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Main content area
+    if uploaded_file:
+        with st.spinner("Analyzing your data..."):
+            analysis_data = optimizer.analyze_excel_data(uploaded_file)
+            st.session_state.analysis_data = analysis_data
+            
+        st.success("✅ Data analysis completed!")
+        
+        # Show analysis summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Daily Calls", f"{analysis_data['total_daily_calls']:,.0f}")
+        with col2:
+            peak_hour_str = ", ".join(map(str, analysis_data['peak_hours']))
+            st.metric("Peak Hours", peak_hour_str)
+        with col3:
+            st.metric("Operation Hours", "7:00 - 21:00")
+        
+        # Hourly call volume chart
+        hourly_df = pd.DataFrame({
+            'Hour': list(analysis_data['hourly_volume'].keys()),
+            'Calls': list(analysis_data['hourly_volume'].values())
+        })
+        
+        fig = px.bar(hourly_df, x='Hour', y='Calls', 
+                     title="📊 Hourly Call Volume Forecast",
+                     labels={'Hour': 'Hour of Day', 'Calls': 'Number of Calls'})
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Generate roster button
+        if st.button("🚀 Generate Optimized Roster", use_container_width=True):
+            with st.spinner("Generating optimized roster..."):
+                roster_df, week_offs = optimizer.generate_roster(
+                    analysis_data, 
+                    st.session_state.manual_splits,
+                    st.session_state.selected_languages
+                )
+                
+                if split_filter:
+                    roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
+                
+                st.session_state.roster_df = roster_df
+                st.session_state.week_offs = week_offs
+                
+                # Calculate metrics
+                st.session_state.metrics = optimizer.calculate_coverage(roster_df, analysis_data)
+                st.session_state.answer_rate = optimizer.calculate_answer_rate(roster_df, analysis_data)
+                st.session_state.daily_rates = optimizer.calculate_daily_answer_rates(roster_df, analysis_data)
+                st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
+                st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
+                st.session_state.formatted_roster = optimizer.format_roster_for_display(
+                    roster_df, week_offs, st.session_state.leave_data
+                )
+                
+            st.success("✅ Roster generated successfully!")
+    
+    # Display results if available
+    if st.session_state.roster_df is not None:
+        st.markdown("---")
+        st.header("📋 Roster Results")
+        
+        # Key metrics
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Weekly Capacity", f"{st.session_state.metrics['total_capacity']:,.0f} calls")
+        with col2:
+            st.metric("Required Capacity", f"{st.session_state.metrics['required_capacity']:,.0f} calls")
+        with col3:
+            st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
+        with col4:
+            st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+        
+        # Daily answer rates chart
+        daily_rates_df = pd.DataFrame({
+            'Day': list(st.session_state.daily_rates.keys()),
+            'Answer Rate': list(st.session_state.daily_rates.values())
+        })
+        
+        fig_daily = px.bar(daily_rates_df, x='Day', y='Answer Rate',
+                          title="📈 Daily Expected Answer Rates",
+                          labels={'Answer Rate': 'Answer Rate (%)'})
+        st.plotly_chart(fig_daily, use_container_width=True)
+        
+        # Roster validation
+        st.subheader("✅ Roster Validation")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Split Shift Coverage Validation**")
+            split_validation = optimizer.validate_split_shift_coverage(st.session_state.roster_df)
+            for day, result in split_validation.items():
+                st.write(f"{day}: {result['split_champs']} split champs - {result['status']}")
+        
+        with col2:
+            st.write("**Answer Level Target Validation**")
+            al_validation = optimizer.validate_al_target(st.session_state.roster_df, st.session_state.analysis_data)
+            for day, result in al_validation.items():
+                st.write(f"{day}: {result['expected_al']:.1f}% - {result['status']}")
+        
+        # Display formatted roster
+        st.subheader("👥 Weekly Roster Schedule")
+        
+        if st.session_state.formatted_roster is not None:
+            st.markdown(st.session_state.formatted_roster.to_html(escape=False), unsafe_allow_html=True)
+        else:
+            st.dataframe(st.session_state.roster_df, use_container_width=True)
+        
+        # Hourly AL analysis
+        st.subheader("⏰ Hourly Answer Level Analysis")
+        
+        if st.session_state.hourly_al_results:
+            hourly_al_df = pd.DataFrame(st.session_state.hourly_al_results.values())
+            hourly_al_pivot = hourly_al_df.pivot_table(
+                values='predicted_al', 
+                index='hour', 
+                columns='day', 
+                aggfunc='mean'
+            ).fillna(0)
+            
+            fig_heatmap = px.imshow(hourly_al_pivot,
+                                  labels=dict(x="Day", y="Hour", color="Answer Level"),
+                                  title="Heatmap of Predicted Answer Levels by Hour and Day",
+                                  aspect="auto")
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+        
+        # Late hour coverage
+        st.subheader("🌙 Late Hour Coverage (5 PM - 9 PM)")
+        
+        if st.session_state.late_hour_coverage:
+            late_coverage_df = pd.DataFrame(st.session_state.late_hour_coverage).T
+            st.dataframe(late_coverage_df, use_container_width=True)
+        
+        # Export options
+        st.subheader("💾 Export Options")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Export roster to Excel
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                st.session_state.roster_df.to_excel(writer, sheet_name='Roster', index=False)
+                if st.session_state.hourly_al_results:
+                    hourly_al_df.to_excel(writer, sheet_name='Hourly_AL_Analysis', index=False)
+            
+            st.download_button(
+                "📊 Download Roster as Excel",
+                excel_buffer.getvalue(),
+                "call_center_roster.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        
+        with col2:
+            # Export as CSV
+            csv = st.session_state.roster_df.to_csv(index=False)
+            st.download_button(
+                "📄 Download Roster as CSV",
+                csv,
+                "call_center_roster.csv",
+                "text/csv",
+                use_container_width=True
+            )
+    
+    else:
+        # Show sample data and instructions
+        st.markdown("---")
+        st.header("📋 How to Use This Tool")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("1. Download Template")
+            st.write("Use the sidebar to download the data template Excel file.")
+            
+            st.subheader("2. Fill in Your Data")
+            st.write("""
+            - **Hourly_Data**: Add your call volume by hour (7-21)
+            - **Daily_Data**: Add daily totals and peak information
+            - **Leave_Data**: Mark which agents are on leave
+            """)
+            
+        with col2:
+            st.subheader("3. Upload Your Data")
+            st.write("Upload the filled template using the sidebar file uploader.")
+            
+            st.subheader("4. Generate Roster")
+            st.write("Click the 'Generate Optimized Roster' button to create your schedule.")
+        
+        st.info("💡 **Tip**: If you don't have data ready, you can use the sample data that will be loaded automatically when you click the generate button.")
+
+if __name__ == "__main__":
+    main()
