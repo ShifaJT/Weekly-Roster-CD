@@ -577,7 +577,7 @@ class CallCenterRosterOptimizer:
                             })
                             champs_assigned += 1
             
-            return pd.DataFrame(roster_data)
+                return pd.DataFrame(roster_data)
             
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
