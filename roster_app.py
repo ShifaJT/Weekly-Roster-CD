@@ -521,7 +521,7 @@ class CallCenterRosterOptimizer:
             sample_data['champions_updated'] = False
             return sample_data
 
-        def get_sample_data(self):
+    def get_sample_data(self):
         return {
             'hourly_volume': {
                 7: 38.5, 8: 104.4, 9: 205.8, 10: 271, 11: 315.8, 12: 292.2,
