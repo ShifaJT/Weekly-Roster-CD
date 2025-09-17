@@ -1212,24 +1212,24 @@ class CallCenterRosterOptimizer:
 
         return late_hour_coverage
 
-            def is_agent_working_at_late_hours(self, row):
-        try:
-            if row['Shift Type'] == 'Straight':
-                times = row['Start Time'].split(' to ')
-                start_hour = int(times[0].split(':')[0])
-                end_hour = int(times[1].split(':')[0])
-                return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
-            else:
-                shifts = row['Start Time'].split(' & ')
-                for shift in shifts:
-                    times = shift.split(' to ')
+        def is_agent_working_at_late_hours(self, row):
+            try:
+                if row['Shift Type'] == 'Straight':
+                    times = row['Start Time'].split(' to ')
                     start_hour = int(times[0].split(':')[0])
                     end_hour = int(times[1].split(':')[0])
-                    if start_hour <= 17 < end_hour or start_hour < 21 <= end_hour:
-                        return True
+                    return start_hour <= 17 < end_hour or start_hour < 21 <= end_hour
+                else:
+                    shifts = row['Start Time'].split(' & ')
+                    for shift in shifts:
+                        times = shift.split(' to ')
+                        start_hour = int(times[0].split(':')[0])
+                        end_hour = int(times[1].split(':')[0])
+                        if start_hour <= 17 < end_hour or start_hour < 21 <= end_hour:
+                            return True
+                    return False
+            except:
                 return False
-        except:
-            return False
 
     def validate_split_shift_coverage(self, roster_df):
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
