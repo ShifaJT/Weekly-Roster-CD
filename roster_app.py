@@ -1051,7 +1051,7 @@ class CallCenterRosterOptimizer:
 
         return roster_df
 
-            def filter_split_shift_champs(self, roster_df, can_split_only=True):
+    def filter_split_shift_champs(self, roster_df, can_split_only=True):
         if roster_df is None:
             st.warning("No roster data available for filtering")
             return None
