@@ -541,7 +541,7 @@ class CallCenterRosterOptimizer:
                     required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
             
             # Simple heuristic approach instead of PuLP
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             roster_data = []
             
             # Sort champions by capacity (highest first)
