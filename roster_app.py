@@ -533,12 +533,12 @@ class CallCenterRosterOptimizer:
         }
 
         def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
-        try:
-            hourly_volume = analysis_data['hourly_volume']
+            try:
+                hourly_volume = analysis_data['hourly_volume']
             
-            required_agents_per_hour = {}
-            for hour, calls in hourly_volume.items():
-                required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+                required_agents_per_hour = {}
+                for hour, calls in hourly_volume.items():
+                    required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
             
             # Simple heuristic approach instead of PuLP
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
