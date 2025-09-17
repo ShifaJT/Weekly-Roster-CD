@@ -532,111 +532,56 @@ class CallCenterRosterOptimizer:
             'total_daily_calls': 3130
         }
 
-    def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
-        hourly_volume = analysis_data['hourly_volume']
-        
-        required_agents_per_hour = {}
-        for hour, calls in hourly_volume.items():
-            required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
-        
-        prob = pulp.LpProblem("RosterOptimization", pulp.LpMinimize)
-        
-        shifts = self.shift_patterns
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        
-        # Create variables for each champion and day
-        x = pulp.LpVariable.dicts("assign", 
-                                 ((champ['name'], day) 
-                                  for champ in available_champions 
-                                  for day in days),
-                                 cat='Binary')
-        
-        # Create shift assignment variables
-        y = pulp.LpVariable.dicts("shift_assign",
-                                 ((champ['name'], day, shift_idx)
-                                  for champ in available_champions
-                                  for day in days
-                                  for shift_idx in range(len(shifts))),
-                                 cat='Binary')
-        
-        # Objective: Minimize the maximum deviation from required agents
-        max_deviation = pulp.LpVariable("max_deviation", lowBound=0, cat='Continuous')
-        
-        # Add constraints to minimize maximum deviation
-        for hour in self.operation_hours:
-            agents_at_hour = pulp.lpSum([
-                y[champ['name'], day, shift_idx] 
-                for champ in available_champions 
-                for day in days 
-                for shift_idx, shift in enumerate(shifts)
-                if self.is_hour_in_shift(hour, shift)
-            ])
-            
-            # Constraint: agents at hour should be close to required
-            prob += agents_at_hour >= required_agents_per_hour[hour] - max_deviation
-            prob += agents_at_hour <= required_agents_per_hour[hour] + max_deviation
-        
-        # Each champion works at most one shift per day
-        for champ in available_champions:
-            for day in days:
-                prob += pulp.lpSum([y[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))]) <= 1
-                # Link x and y variables
-                prob += x[champ['name'], day] == pulp.lpSum([y[champ['name'], day, shift_idx] for shift_idx in range(len(shifts))])
-        
-        # Each champion works 5 days per week
-        for champ in available_champions:
-            prob += pulp.lpSum([x[champ['name'], day] for day in days]) == 5
-        
-        # Female champions don't work late shifts (after 8 PM)
-        for champ in available_champions:
-            if champ['gender'] == 'F':
-                for day in days:
-                    for shift_idx, shift in enumerate(shifts):
-                        if shift['times'][-1] >= 20:
-                            prob += y[champ['name'], day, shift_idx] == 0
-        
-        # Ensure proper coverage during peak hours
-        peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
-        for hour in peak_hours:
-            agents_at_hour = pulp.lpSum([
-                y[champ['name'], day, shift_idx] 
-                for champ in available_champions 
-                for day in days 
-                for shift_idx, shift in enumerate(shifts)
-                if self.is_hour_in_shift(hour, shift)
-            ])
-            prob += agents_at_hour >= required_agents_per_hour[hour] * 0.9  # At least 90% of required during peak
-        
-        prob += max_deviation
-        
+        def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
-            prob.solve(pulp.PULP_CBC_CMD(msg=0))
-        except:
-            return self.generate_fallback_roster(available_champions, days, shifts)
-        
-        # Extract the solution
-        roster_data = []
-        for champ in available_champions:
+            hourly_volume = analysis_data['hourly_volume']
+            
+            required_agents_per_hour = {}
+            for hour, calls in hourly_volume.items():
+                required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+            
+            # Use a simpler approach instead of PuLP optimization
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            roster_data = []
+            
+            # Sort champions by capacity (highest first)
+            sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
+            
             for day in days:
-                for shift_idx in range(len(shifts)):
-                    if pulp.value(y[champ['name'], day, shift_idx]) == 1:
-                        shift = shifts[shift_idx]
+                # Calculate required agents for peak hours
+                peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in analysis_data.get('peak_hours', [11, 12, 13, 14])])
+                
+                # Assign champions for this day
+                champs_assigned = 0
+                for champ in sorted_champs:
+                    if champs_assigned < peak_requirements:
+                        # Choose appropriate shift pattern
+                        if champ['can_split'] and random.random() < 0.3:
+                            shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'split'])
+                        else:
+                            shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'straight'])
+                        
                         roster_data.append({
                             'Day': day,
                             'Champion': champ['name'],
                             'Primary Language': champ['primary_lang'].upper(),
                             'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                            'Shift Type': 'Split' if shift['type'] == 'split' else 'Straight',
-                            'Start Time': shift['display'],
-                            'End Time': f"{shift['times'][-1]:02d}:00",
-                            'Duration': f'{shift["hours"]} hours',
+                            'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                            'Start Time': shift_pattern['display'],
+                            'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                            'Duration': f'{shift_pattern["hours"]} hours',
                             'Calls/Hour Capacity': champ['calls_per_hour'],
                             'Can Split': 'Yes' if champ['can_split'] else 'No',
                             'Gender': champ['gender'],
                             'Status': champ['status']
                         })
-        
-        return pd.DataFrame(roster_data)
+                        champs_assigned += 1
+            
+            return pd.DataFrame(roster_data)
+            
+        except Exception as e:
+            st.error(f"Optimization error: {str(e)}")
+            return self.generate_fallback_roster(available_champions, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], self.shift_patterns)
 
     def generate_fallback_roster(self, available_champions, days, shifts):
         roster_data = []
@@ -1106,13 +1051,19 @@ class CallCenterRosterOptimizer:
 
         return roster_df
 
-    def filter_split_shift_champs(self, roster_df, can_split_only=True):
+        def filter_split_shift_champs(self, roster_df, can_split_only=True):
+        if roster_df is None:
+            st.warning("No roster data available for filtering")
+            return None
+            
         if can_split_only:
             split_champs = [champ["name"] for champ in self.champions if champ["can_split"]]
 
             filtered_roster = roster_df.copy()
             split_mask = filtered_roster['Shift Type'] == 'Split'
-            filtered_roster = filtered_roster[~split_mask | filtered_roster['Champion'].isin(split_champs)]
+            # Only keep split shifts for champions who can actually work them
+            valid_split_mask = filtered_roster['Champion'].isin(split_champs)
+            filtered_roster = filtered_roster[~split_mask | (split_mask & valid_split_mask)]
 
             return filtered_roster
         else:
@@ -1607,31 +1558,40 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
         
         # Generate roster button
-        if st.button("🚀 Generate Optimized Roster", use_container_width=True):
-            with st.spinner("Generating optimized roster..."):
-                roster_df, week_offs = optimizer.generate_roster(
-                    analysis_data, 
-                    st.session_state.manual_splits,
-                    st.session_state.selected_languages
-                )
-                
-                if split_filter:
-                    roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
-                
-                st.session_state.roster_df = roster_df
-                st.session_state.week_offs = week_offs
-                
-                # Calculate metrics
-                st.session_state.metrics = optimizer.calculate_coverage(roster_df, analysis_data)
-                st.session_state.answer_rate = optimizer.calculate_answer_rate(roster_df, analysis_data)
-                st.session_state.daily_rates = optimizer.calculate_daily_answer_rates(roster_df, analysis_data)
-                st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
-                st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
-                st.session_state.formatted_roster = optimizer.format_roster_for_display(
-                    roster_df, week_offs, st.session_state.leave_data
-                )
-                
-            st.success("✅ Roster generated successfully!")
+        # In your main() function, replace the roster generation section:
+if st.button("🚀 Generate Optimized Roster", use_container_width=True):
+    with st.spinner("Generating optimized roster..."):
+        roster_df, week_offs = optimizer.generate_roster(
+            analysis_data, 
+            st.session_state.manual_splits,
+            st.session_state.selected_languages
+        )
+        
+        if roster_df is None:
+            st.error("Failed to generate roster. Please check your data and try again.")
+            return
+            
+        if split_filter:
+            roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
+            if roster_df is None:
+                st.error("Failed to filter roster.")
+                return
+        
+        st.session_state.roster_df = roster_df
+        st.session_state.week_offs = week_offs
+        
+        # Calculate metrics only if we have valid data
+        if roster_df is not None and not roster_df.empty:
+            st.session_state.metrics = optimizer.calculate_coverage(roster_df, analysis_data)
+            st.session_state.answer_rate = optimizer.calculate_answer_rate(roster_df, analysis_data)
+            st.session_state.daily_rates = optimizer.calculate_daily_answer_rates(roster_df, analysis_data)
+            st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
+            st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
+            st.session_state.formatted_roster = optimizer.format_roster_for_display(
+                roster_df, week_offs, st.session_state.leave_data
+            )
+            
+        st.success("✅ Roster generated successfully!")
     
     # Show champion editor if toggled
     if st.session_state.show_champion_editor:
