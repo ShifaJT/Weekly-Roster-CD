@@ -1212,7 +1212,7 @@ class CallCenterRosterOptimizer:
 
         return late_hour_coverage
 
-    def is_agent_working_at_late_hours(self, row):
+        def is_agent_working_at_late_hours(self, row):
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
@@ -1229,7 +1229,7 @@ class CallCenterRosterOptimizer:
                         return True
                 return False
         except:
-        return False
+            return False  # This line should be indented by 4 spaces
 
     def validate_split_shift_coverage(self, roster_df):
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
