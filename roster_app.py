@@ -551,33 +551,33 @@ class CallCenterRosterOptimizer:
                 peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
                 peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
             
-            for day in days:
-                champs_assigned = 0
-                for champ in sorted_champs:
-                    if champs_assigned < peak_requirements:
-                        # Choose appropriate shift pattern
-                        if champ['can_split'] and random.random() < 0.3:
-                            shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'split'])
-                        else:
-                            shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'straight'])
+                for day in days:
+                    champs_assigned = 0
+                    for champ in sorted_champs:
+                        if champs_assigned < peak_requirements:
+                            # Choose appropriate shift pattern
+                            if champ['can_split'] and random.random() < 0.3:
+                                shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'split'])
+                            else:
+                                shift_pattern = random.choice([p for p in self.shift_patterns if p['type'] == 'straight'])
                         
-                        roster_data.append({
-                            'Day': day,
-                            'Champion': champ['name'],
-                            'Primary Language': champ['primary_lang'].upper(),
-                            'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                            'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                            'Start Time': shift_pattern['display'],
-                            'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                            'Duration': f'{shift_pattern["hours"]} hours',
-                            'Calls/Hour Capacity': champ['calls_per_hour'],
-                            'Can Split': 'Yes' if champ['can_split'] else 'No',
-                            'Gender': champ['gender'],
-                            'Status': champ['status']
-                        })
-                        champs_assigned += 1
+                            roster_data.append({
+                                'Day': day,
+                                'Champion': champ['name'],
+                                'Primary Language': champ['primary_lang'].upper(),
+                                'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                                'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                                'Start Time': shift_pattern['display'],
+                                'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                                'Duration': f'{shift_pattern["hours"]} hours',
+                                'Calls/Hour Capacity': champ['calls_per_hour'],
+                                'Can Split': 'Yes' if champ['can_split'] else 'No',
+                                'Gender': champ['gender'],
+                                'Status': champ['status']
+                            })
+                            champs_assigned += 1
             
-            return pd.DataFrame(roster_data)
+                return pd.DataFrame(roster_data)
             
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
