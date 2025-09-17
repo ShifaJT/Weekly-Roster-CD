@@ -579,10 +579,10 @@ class CallCenterRosterOptimizer:
             
                 return pd.DataFrame(roster_data)
             
-        except Exception as e:
-            st.error(f"Optimization error: {str(e)}")
-            # Fallback to simple roster generation
-            return self.generate_fallback_roster(available_champions, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], self.shift_patterns)
+            except Exception as e:
+                st.error(f"Optimization error: {str(e)}")
+                # Fallback to simple roster generation
+                return self.generate_fallback_roster(available_champions, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], self.shift_patterns)
             
         def generate_fallback_roster(self, available_champions, days):
         roster_data = []
