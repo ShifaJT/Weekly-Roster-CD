@@ -1163,7 +1163,7 @@ class CallCenterRosterOptimizer:
 
         return late_hour_coverage
 
-            def is_agent_working_at_late_hours(self, row):
+    def is_agent_working_at_late_hours(self, row):
         try:
             if row['Shift Type'] == 'Straight':
                 times = row['Start Time'].split(' to ')
