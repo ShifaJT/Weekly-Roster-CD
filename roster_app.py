@@ -1528,7 +1528,7 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Main content area
+        # Main content area
     if uploaded_file:
         with st.spinner("Analyzing your data..."):
             analysis_data = optimizer.analyze_excel_data(uploaded_file)
@@ -1558,40 +1558,39 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
         
         # Generate roster button
-        # In your main() function, replace the roster generation section:
-if st.button("🚀 Generate Optimized Roster", use_container_width=True):
-    with st.spinner("Generating optimized roster..."):
-        roster_df, week_offs = optimizer.generate_roster(
-            analysis_data, 
-            st.session_state.manual_splits,
-            st.session_state.selected_languages
-        )
-        
-        if roster_df is None:
-            st.error("Failed to generate roster. Please check your data and try again.")
-            return
-            
-        if split_filter:
-            roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
-            if roster_df is None:
-                st.error("Failed to filter roster.")
-                return
-        
-        st.session_state.roster_df = roster_df
-        st.session_state.week_offs = week_offs
-        
-        # Calculate metrics only if we have valid data
-        if roster_df is not None and not roster_df.empty:
-            st.session_state.metrics = optimizer.calculate_coverage(roster_df, analysis_data)
-            st.session_state.answer_rate = optimizer.calculate_answer_rate(roster_df, analysis_data)
-            st.session_state.daily_rates = optimizer.calculate_daily_answer_rates(roster_df, analysis_data)
-            st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
-            st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
-            st.session_state.formatted_roster = optimizer.format_roster_for_display(
-                roster_df, week_offs, st.session_state.leave_data
-            )
-            
-        st.success("✅ Roster generated successfully!")
+        if st.button("🚀 Generate Optimized Roster", use_container_width=True):
+            with st.spinner("Generating optimized roster..."):
+                roster_df, week_offs = optimizer.generate_roster(
+                    analysis_data, 
+                    st.session_state.manual_splits,
+                    st.session_state.selected_languages
+                )
+                
+                if roster_df is None:
+                    st.error("Failed to generate roster. Please check your data and try again.")
+                    return
+                    
+                if split_filter:
+                    roster_df = optimizer.filter_split_shift_champs(roster_df, can_split_only=True)
+                    if roster_df is None:
+                        st.error("Failed to filter roster.")
+                        return
+                
+                st.session_state.roster_df = roster_df
+                st.session_state.week_offs = week_offs
+                
+                # Calculate metrics only if we have valid data
+                if roster_df is not None and not roster_df.empty:
+                    st.session_state.metrics = optimizer.calculate_coverage(roster_df, analysis_data)
+                    st.session_state.answer_rate = optimizer.calculate_answer_rate(roster_df, analysis_data)
+                    st.session_state.daily_rates = optimizer.calculate_daily_answer_rates(roster_df, analysis_data)
+                    st.session_state.hourly_al_results = optimizer.calculate_hourly_al_analysis(roster_df, analysis_data)
+                    st.session_state.late_hour_coverage = optimizer.calculate_late_hour_coverage(roster_df)
+                    st.session_state.formatted_roster = optimizer.format_roster_for_display(
+                        roster_df, week_offs, st.session_state.leave_data
+                    )
+                    
+                st.success("✅ Roster generated successfully!")
     
     # Show champion editor if toggled
     if st.session_state.show_champion_editor:
@@ -1733,6 +1732,6 @@ if st.button("🚀 Generate Optimized Roster", use_container_width=True):
             st.write("Click the 'Generate Optimized Roster' button to create your schedule.")
         
         st.info("💡 **Tip**: If you don't have data ready, you can use the sample data that will be loaded automatically when you click the generate button.")
-
+        
 if __name__ == "__main__":
     main()
