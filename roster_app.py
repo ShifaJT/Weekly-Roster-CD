@@ -542,7 +542,7 @@ class CallCenterRosterOptimizer:
             
             # Simple heuristic approach instead of PuLP
                 days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            roster_data = []
+                roster_data = []
             
             # Sort champions by capacity (highest first)
             sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
