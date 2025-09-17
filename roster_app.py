@@ -544,12 +544,12 @@ class CallCenterRosterOptimizer:
                 days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                 roster_data = []
             
-            # Sort champions by capacity (highest first)
-            sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
+                # Sort champions by capacity (highest first)
+                sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
             
-            # Calculate peak requirements
-            peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
-            peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
+                # Calculate peak requirements
+                peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
+                peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
             
             for day in days:
                 champs_assigned = 0
