@@ -532,7 +532,7 @@ class CallCenterRosterOptimizer:
             'total_daily_calls': 3130
         }
 
-    def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
+        def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
             hourly_volume = analysis_data['hourly_volume']
             
@@ -540,18 +540,18 @@ class CallCenterRosterOptimizer:
             for hour, calls in hourly_volume.items():
                 required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
             
-            # Use a simpler approach instead of PuLP optimization
+            # Simple heuristic approach instead of PuLP
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             roster_data = []
             
             # Sort champions by capacity (highest first)
             sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
             
+            # Calculate peak requirements
+            peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
+            peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
+            
             for day in days:
-                # Calculate required agents for peak hours
-                peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in analysis_data.get('peak_hours', [11, 12, 13, 14])])
-                
-                # Assign champions for this day
                 champs_assigned = 0
                 for champ in sorted_champs:
                     if champs_assigned < peak_requirements:
@@ -581,20 +581,19 @@ class CallCenterRosterOptimizer:
             
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
+            # Fallback to simple roster generation
             return self.generate_fallback_roster(available_champions, ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], self.shift_patterns)
-
-    def generate_fallback_roster(self, available_champions, days, shifts):
+            
+        def generate_fallback_roster(self, available_champions, days):
         roster_data = []
+        straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+        split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
         
-        straight_shifts = [s for s in shifts if s['type'] == 'straight']
-        split_shifts = [s for s in shifts if s['type'] == 'split']
-        
-        # Distribute champions evenly across days
-        for i, champ in enumerate(available_champions):
+        for champ in available_champions:
             work_days = random.sample(days, 5)  # Each champ works 5 days
             
             for day in work_days:
-                if champ['can_split'] and i % 3 == 0:
+                if champ['can_split'] and random.random() < 0.3:
                     shift = random.choice(split_shifts)
                 else:
                     shift = random.choice(straight_shifts)
