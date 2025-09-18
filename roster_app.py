@@ -655,8 +655,8 @@ class CallCenterRosterOptimizer:
             return None, None
 
     def fill_missing_days(self, roster_df, available_champions):
-    """Ensure every champion has shifts for all working days"""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        """Ensure every champion has shifts for all working days"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
     # Get current assignments
     current_assignments = {}
