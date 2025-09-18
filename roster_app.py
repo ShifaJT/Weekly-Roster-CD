@@ -334,7 +334,7 @@ class CallCenterRosterOptimizer:
             'Casual_Leave': [0] * len(self.champions),
             'Period_Leave': [0] * len(self.champions),
             'Annual_Leave': [0] * len(self.champions),
-            'Comp_Off': [0] * len(selfchampions],
+            'Comp_Off': [0] * len(selfchampions),
             'Maternity_Leave': [1 if champ['status'] == 'Maternity' else 0 for champ in self.champions]
         })
 
