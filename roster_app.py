@@ -533,23 +533,23 @@ class CallCenterRosterOptimizer:
         }
 
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
-    try:
-        hourly_volume = analysis_data['hourly_volume']
+        try:
+            hourly_volume = analysis_data['hourly_volume']
     
-        required_agents_per_hour = {}
-        for hour, calls in hourly_volume.items():
-            required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+            required_agents_per_hour = {}
+            for hour, calls in hourly_volume.items():
+                required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
     
-        # Simple heuristic approach instead of PuLP
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        roster_data = []
+            # Simple heuristic approach instead of PuLP
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            roster_data = []
         
-        # Sort champions by capacity (highest first)
-        sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
+            # Sort champions by capacity (highest first)
+            sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
         
-        # Calculate peak requirements
-        peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
-        peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
+            # Calculate peak requirements
+            peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
+            peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
         
         for day in days:
             champs_assigned = 0
