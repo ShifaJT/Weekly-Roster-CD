@@ -116,7 +116,7 @@ st.markdown("""
 class CallCenterRosterOptimizer:
     def __init__(self):
         self.operation_hours = list(range(7, 22))
-        self.champions = self.load_champions()
+        selfchampions = self.load_champions()
         
         self.TARGET_AL = 95
         self.MIN_AL = 95
@@ -170,24 +170,24 @@ class CallCenterRosterOptimizer:
 
     def update_champion(self, old_name, new_data):
         """Update champion information"""
-        for i, champ in enumerate(self.champions):
+        for i, champ in enumerate(selfchampions):
             if champ['name'] == old_name:
-                self.champions[i] = new_data
+                selfchampions[i] = new_data
                 return True
         return False
 
     def add_champion(self, champion_data):
         """Add a new champion"""
-        self.champions.append(champion_data)
+        selfchampions.append(champion_data)
 
     def delete_champion(self, champion_name):
         """Delete a champion"""
-        self.champions = [champ for champ in self.champions if champ['name'] != champion_name]
+        selfchampions = [champ for champ in selfchampions if champ['name'] != champion_name]
 
     def get_available_languages(self):
         """Get all unique languages from champions"""
         languages = set()
-        for champ in self.champions:
+        for champ in selfchampions:
             if champ['primary_lang']:
                 languages.add(champ['primary_lang'])
             for lang in champ['secondary_langs']:
@@ -329,24 +329,24 @@ class CallCenterRosterOptimizer:
         })
 
         leave_data = pd.DataFrame({
-            'Champion': [champ['name'] for champ in self.champions],
-            'Sick_Leave': [0] * len(self.champions),
-            'Casual_Leave': [0] * len(self.champions),
-            'Period_Leave': [0] * len(self.champions),
-            'Annual_Leave': [0] * len(self.champions),
+            'Champion': [champ['name'] for champ in selfchampions],
+            'Sick_Leave': [0] * len(selfchampions),
+            'Casual_Leave': [0] * len(selfchampions),
+            'Period_Leave': [0] * len(selfchampions),
+            'Annual_Leave': [0] * len(selfchampions),
             'Comp_Off': [0] * len(selfchampions),
-            'Maternity_Leave': [1 if champ['status'] == 'Maternity' else 0 for champ in self.champions]
+            'Maternity_Leave': [1 if champ['status'] == 'Maternity' else 0 for champ in selfchampions]
         })
 
         # Add champion data sheet
         champion_data = pd.DataFrame({
-            'Name': [champ['name'] for champ in self.champions],
-            'Primary_Language': [champ['primary_lang'] for champ in self.champions],
-            'Secondary_Languages': [','.join(champ['secondary_langs']) for champ in self.champions],
-            'Calls_Per_Hour': [champ['calls_per_hour'] for champ in self.champions],
-            'Can_Split': [1 if champ['can_split'] else 0 for champ in self.champions],
-            'Gender': [champ['gender'] for champ in self.champions],
-            'Status': [champ['status'] for champ in self.champions]
+            'Name': [champ['name'] for champ in selfchampions],
+            'Primary_Language': [champ['primary_lang'] for champ in selfchampions],
+            'Secondary_Languages': [','.join(champ['secondary_langs']) for champ in selfchampions],
+            'Calls_Per_Hour': [champ['calls_per_hour'] for champ in selfchampions],
+            'Can_Split': [1 if champ['can_split'] else 0 for champ in selfchampions],
+            'Gender': [champ['gender'] for champ in selfchampions],
+            'Status': [champ['status'] for champ in selfchampions]
         })
 
         instructions = pd.DataFrame({
@@ -437,7 +437,7 @@ class CallCenterRosterOptimizer:
                         }
                         new_champions.append(champion)
                     
-                    self.champions = new_champions
+                    selfchampions = new_champions
                     updated_champions = True
                     st.success("✅ Champion data updated from Excel file")
 
@@ -709,7 +709,7 @@ class CallCenterRosterOptimizer:
     def get_available_champions(self, leave_data, specific_date=None):
         available_champs = []
         
-        for champ in self.champions:
+        for champ in selfchampions:
             # Skip maternity leave champions
             if champ['status'] == 'Maternity':
                 continue
@@ -841,7 +841,7 @@ class CallCenterRosterOptimizer:
             column_config={
                 "Champion": st.column_config.SelectboxColumn(
                     "Champion",
-                    options=[champ["name"] for champ in self.champions],
+                    options=[champ["name"] for champ in selfchampions],
                     required=True
                 ),
                 "Shift Type": st.column_config.SelectboxColumn(
@@ -879,7 +879,7 @@ class CallCenterRosterOptimizer:
             column_config={
                 "Champion": st.column_config.SelectboxColumn(
                     "Champion",
-                    options=[champ["name"] for champ in self.champions],
+                    options=[champ["name"] for champ in selfchampions],
                     required=True
                 ),
                 "Current Day Off": st.column_config.SelectboxColumn(
@@ -907,7 +907,7 @@ class CallCenterRosterOptimizer:
         st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
         
         leave_editor_data = []
-        for champ in self.champions:
+        for champ in selfchampions:
             champ_name = champ['name']
             champ_data = {"Champion": champ_name}
             
@@ -925,7 +925,7 @@ class CallCenterRosterOptimizer:
         column_config = {
             "Champion": st.column_config.SelectboxColumn(
                 "Champion",
-                options=[champ["name"] for champ in self.champions],
+                options=[champ["name"] for champ in selfchampions],
                 required=True
             )
         }
@@ -1056,7 +1056,7 @@ class CallCenterRosterOptimizer:
             return None
             
         if can_split_only:
-            split_champs = [champ["name"] for champ in self.champions if champ["can_split"]]
+            split_champs = [champ["name"] for champ in selfchampions if champ["can_split"]]
 
             filtered_roster = roster_df.copy()
             split_mask = filtered_roster['Shift Type'] == 'Split'
@@ -1076,10 +1076,10 @@ class CallCenterRosterOptimizer:
         week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
         display_df = pd.DataFrame()
-        display_df['Name'] = [champ['name'] for champ in self.champions]
-        display_df['Status'] = [champ['status'] for champ in self.champions]
-        display_df['Primary Language'] = [champ['primary_lang'].upper() for champ in self.champions]
-        display_df['Secondary Languages'] = [', '.join([lang.upper() for lang in champ['secondary_langs']]) for champ in self.champions]
+        display_df['Name'] = [champ['name'] for champ in selfchampions]
+        display_df['Status'] = [champ['status'] for champ in selfchampions]
+        display_df['Primary Language'] = [champ['primary_lang'].upper() for champ in selfchampions]
+        display_df['Secondary Languages'] = [', '.join([lang.upper() for lang in champ['secondary_langs']]) for champ in selfchampions]
 
         display_df['Shift'] = ""
 
@@ -1238,7 +1238,7 @@ class CallCenterRosterOptimizer:
         
         # Convert champions to DataFrame for editing
         champ_data = []
-        for champ in self.champions:
+        for champ in selfchampions:
             champ_data.append({
                 'Name': champ['name'],
                 'Primary Language': champ['primary_lang'],
@@ -1335,13 +1335,13 @@ class CallCenterRosterOptimizer:
                 }
                 new_champions.append(champion)
             
-            self.champions = new_champions
+            selfchampions = new_champions
             st.success("Champion data saved successfully!")
             st.rerun()
         
         # Delete champion section
         st.subheader("🗑️ Delete Champion")
-        delete_name = st.selectbox("Select champion to delete", [champ['name'] for champ in self.champions])
+        delete_name = st.selectbox("Select champion to delete", [champ['name'] for champ in selfchampions])
         if st.button("Delete Champion", type="secondary"):
             self.delete_champion(delete_name)
             st.success(f"Deleted champion: {delete_name}")
