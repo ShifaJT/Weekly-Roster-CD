@@ -658,59 +658,60 @@ class CallCenterRosterOptimizer:
         """Ensure every champion has shifts for all working days"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
-    # Get current assignments
-    current_assignments = {}
-    for _, row in roster_df.iterrows():
-        champ = row['Champion']
-        day = row['Day']
-        if champ not in current_assignments:
-            current_assignments[champ] = {}
-        current_assignments[champ][day] = row.to_dict()
+        # Get current assignments
+        current_assignments = {}
+        for _, row in roster_df.iterrows():
+            champ = row['Champion']
+            day = row['Day']
+            if champ not in current_assignments:
+                current_assignments[champ] = {}
+            current_assignments[champ][day] = row.to_dict()
     
-    # Fill missing days
-    new_roster_data = []
-    for champ in available_champions:
-        champ_name = champ['name']
-        champ_days = current_assignments.get(champ_name, {})
-        work_days = list(champ_days.keys())
+        # Fill missing days
+        new_roster_data = []
+        for champ in available_champions:
+            champ_name = champ['name']
+            champ_days = current_assignments.get(champ_name, {})
+            work_days = list(champ_days.keys())
         
-        # If champion has less than 5 days, add missing days
-        if len(work_days) < 5:
-            missing_days = [day for day in days if day not in work_days]
-            days_to_add = random.sample(missing_days, min(5 - len(work_days), len(missing_days)))
+            # If champion has less than 5 days, add missing days
+            if len(work_days) < 5:
+                missing_days = [day for day in days if day not in work_days]
+                num_days_to_add = min(5 - len(work_days), len(missing_days))
+                days_to_add = random.sample(missing_days, num_days_to_add)
             
-            for day in days_to_add:
-                # Assign appropriate shift
-                straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                for day in days_to_add:
+                    # Assign appropriate shift
+                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
                 
-                if champ['can_split'] and random.random() < 0.3 and split_shifts:
-                    shift = random.choice(split_shifts)
-                elif straight_shifts:
-                    shift = random.choice(straight_shifts)
-                else:
-                    shift = self.shift_patterns[0]  # Fallback
+                    if champ['can_split'] and random.random() < 0.3 and split_shifts:
+                        shift = random.choice(split_shifts)
+                    elif straight_shifts:
+                        shift = random.choice(straight_shifts)
+                    else:
+                        shift = self.shift_patterns[0]  # Fallback
                 
-                new_roster_data.append({
-                    'Day': day,
-                    'Champion': champ_name,
-                    'Primary Language': champ['primary_lang'].upper(),
-                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                    'Shift Type': 'Split' if shift['type'] == 'split' else 'Straight',
-                    'Start Time': shift['display'],
-                    'End Time': f"{shift['times'][-1]:02d}:00",
-                    'Duration': f'{shift["hours"]} hours',
-                    'Calls/Hour Capacity': champ['calls_per_hour'],
-                    'Can Split': 'Yes' if champ['can_split'] else 'No',
-                    'Gender': champ['gender'],
-                    'Status': champ['status']
-                })
+                    new_roster_data.append({
+                        'Day': day,
+                        'Champion': champ_name,
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift['type'] == 'split' else 'Straight',
+                        'Start Time': shift['display'],
+                        'End Time': f"{shift['times'][-1]:02d}:00",
+                        'Duration': f'{shift["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
         
-        # Add existing assignments
-        for day, assignment in champ_days.items():
-            new_roster_data.append(assignment)
+            # Add existing assignments
+            for day, assignment in champ_days.items():
+                new_roster_data.append(assignment)
     
-    return pd.DataFrame(new_roster_data)
+        return pd.DataFrame(new_roster_data)
 
     def get_available_champions(self, leave_data, specific_date=None):
         available_champs = []
