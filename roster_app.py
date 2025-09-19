@@ -792,9 +792,8 @@ class CallCenterRosterOptimizer:
             roster_df, week_offs = self.assign_weekly_offs_with_requests(
                 roster_df, 
                 analysis_data.get('leave_data', {}), 
-                max_offs_per_day=4, 
                 min_split_champs=active_split_champs
-            )
+            )  
 
             return roster_df, week_offs
 
@@ -1066,37 +1065,72 @@ class CallCenterRosterOptimizer:
         
         return pd.DataFrame(adjusted_data)
 
-    def assign_weekly_offs_with_requests(self, roster_df, leave_data, max_offs_per_day=4, min_split_champs=4):
+    def assign_weekly_offs_with_requests(self, roster_df, leave_data, max_offs_per_day=None, min_split_champs=4):
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+        # Set different maximum weekly offs per day based on call volume
+        if max_offs_per_day is None:
+            max_offs_per_day = {
+                "Monday": 4,    # Higher call volume days - fewer offs
+                "Tuesday": 4,   # Higher call volume days - fewer offs
+                "Wednesday": 4, # Higher call volume days - fewer offs
+                "Thursday": 4,  # Medium call volume
+                "Friday": 4,    # Medium call volume
+                "Saturday": 5,  # Lower call volume - more offs allowed
+                "Sunday": 5     # Lower call volume - more offs allowed
+            }
+    
         champions = roster_df['Champion'].unique()
-
         updated_roster = roster_df.copy()
         week_offs = {}
         offs_per_day = {day: 0 for day in days}
 
-        # First, honor requested weekly offs
+        # First, honor requested weekly offs if they don't exceed limits
         for champion in champions:
             requested_off = leave_data.get(champion, {}).get('requested_weekly_off', "")
-            if requested_off and requested_off in days and offs_per_day[requested_off] < max_offs_per_day:
+            if (requested_off and requested_off in days and 
+                offs_per_day[requested_off] < max_offs_per_day[requested_off]):
                 week_offs[champion] = requested_off
                 offs_per_day[requested_off] += 1
                 updated_roster = updated_roster[
                     ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == requested_off))
                 ]
 
-        # Then assign remaining offs
-        for champion in champions:
-            if champion in week_offs:
-                continue  # Already has an off day
-                
+        # Then assign remaining offs strategically
+        remaining_champions = [champ for champ in champions if champ not in week_offs]
+    
+        # Sort remaining champions by their impact on coverage (lower capacity first)
+        remaining_champions.sort(key=lambda x: next((c['calls_per_hour'] for c in self.champions if c['name'] == x), 0))
+    
+        for champion in remaining_champions:
             champ_days = updated_roster[updated_roster['Champion'] == champion]['Day'].unique()
-            
+        
             if len(champ_days) == 7:
                 # Champion works all days, need to assign an off day
-                available_off_days = [day for day in days if offs_per_day[day] < max_offs_per_day]
-                
+                # Prioritize days with higher call volume first (Mon-Wed)
+                available_off_days = []
+            
+                # Try high volume days first (Mon-Wed)
+                for day in ["Monday", "Tuesday", "Wednesday"]:
+                    if offs_per_day[day] < max_offs_per_day[day]:
+                        available_off_days.append(day)
+            
+                # If no high volume days available, try medium volume days
+                if not available_off_days:
+                    for day in ["Thursday", "Friday"]:
+                        if offs_per_day[day] < max_offs_per_day[day]:
+                            available_off_days.append(day)
+            
+                # If still no days available, try low volume days
+                if not available_off_days:
+                    for day in ["Saturday", "Sunday"]:
+                        if offs_per_day[day] < max_offs_per_day[day]:
+                            available_off_days.append(day)
+            
                 if available_off_days:
-                    day_off = random.choice(available_off_days)
+                    # Prefer days that already have some offs to balance the distribution
+                    available_off_days.sort(key=lambda x: offs_per_day[x])
+                    day_off = available_off_days[0]
                     week_offs[champion] = day_off
                     offs_per_day[day_off] += 1
                     updated_roster = updated_roster[
@@ -1109,17 +1143,21 @@ class CallCenterRosterOptimizer:
                 working_days = set(champ_days)
                 all_days = set(days)
                 available_offs = list(all_days - working_days)
-                
-                if available_offs:
-                    day_off = available_offs[0]
+            
+                # Filter available offs by maximum limits
+                valid_offs = [day for day in available_offs if offs_per_day[day] < max_offs_per_day[day]]
+            
+                if valid_offs:
+                    # Choose the day with the least current offs to balance distribution
+                    valid_offs.sort(key=lambda x: offs_per_day[x])
+                    day_off = valid_offs[0]
                     week_offs[champion] = day_off
-                    if day_off in days:
-                        offs_per_day[day_off] += 1
+                    offs_per_day[day_off] += 1
                 else:
                     week_offs[champion] = "No day off"
 
         return updated_roster, week_offs
-
+    
     def apply_special_rules(self, roster_df):
         revathi_mask = roster_df['Champion'] == 'Revathi'
         roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
