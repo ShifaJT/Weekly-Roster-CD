@@ -542,6 +542,13 @@ class CallCenterRosterOptimizer:
     
             # Simple heuristic approach instead of PuLP
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    # [PASTE THIS]
+            fixed_shift_map = {}
+            if getattr(st.session_state, 'keep_week_shift', False):
+                for champ in availablechampions:
+                    shift_choices = [p['display'] for p in self.shiftpatterns if p['type'] == 'straight']
+                    fixed_shift_map[champ['name']] = random.choice(shift_choices)
+
             roster_data = []
         
             # Sort champions by capacity (highest first)
