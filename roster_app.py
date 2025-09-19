@@ -8,6 +8,8 @@ from io import BytesIO
 import base64
 import random
 import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 # Page configuration
 st.set_page_config(
@@ -535,61 +537,53 @@ class CallCenterRosterOptimizer:
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
             hourly_volume = analysis_data['hourly_volume']
-    
+        
             required_agents_per_hour = {}
             for hour, calls in hourly_volume.items():
                 required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
-    
+        
             # Simple heuristic approach instead of PuLP
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                    # [PASTE THIS]
-            fixed_shift_map = {}
-            if getattr(st.session_state, 'keep_week_shift', False):
-                for champ in availablechampions:
-                    shift_choices = [p['display'] for p in self.shiftpatterns if p['type'] == 'straight']
-                    fixed_shift_map[champ['name']] = random.choice(shift_choices)
-
             roster_data = []
-        
+            
             # Sort champions by capacity (highest first)
             sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
-        
+            
             # Calculate peak requirements
             peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
             peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
-        
-            for day in days:
-                champs_assigned = 0
-                for champ in sorted_champs:
-                    if champs_assigned < peak_requirements:
-                        # Choose appropriate shift pattern
-                        if champ['can_split'] and random.random() < 0.3:
-                            # Get split shifts by index instead of using the dict directly
-                            split_shifts = [p for p in self.shift_patterns if p['type'] == 'split']
-                            shift_pattern = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
-                        else:
-                            # Get straight shifts by index instead of using the dict directly
-                            straight_shifts = [p for p in self.shift_patterns if p['type'] == 'straight']
-                            shift_pattern = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
-                    
-                        roster_data.append({
-                            'Day': day,
-                            'Champion': champ['name'],
-                            'Primary Language': champ['primary_lang'].upper(),
-                            'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                            'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                            'Start Time': shift_pattern['display'],
-                            'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                            'Duration': f'{shift_pattern["hours"]} hours',
-                            'Calls/Hour Capacity': champ['calls_per_hour'],
-                            'Can Split': 'Yes' if champ['can_split'] else 'No',
-                            'Gender': champ['gender'],
-                            'Status': champ['status']
-                        })
-                        champs_assigned += 1
-        
+            
+            # Assign consistent shifts for each champion throughout the week
+            for champ in sorted_champs:
+                # Choose appropriate shift pattern for the entire week
+                if champ['can_split'] and random.random() < 0.3:
+                    split_shifts = [p for p in self.shift_patterns if p['type'] == 'split']
+                    shift_pattern = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                else:
+                    straight_shifts = [p for p in self.shift_patterns if p['type'] == 'straight']
+                    shift_pattern = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                
+                # Assign this shift pattern for 5 days
+                work_days = random.sample(days, 5)
+                
+                for day in work_days:
+                    roster_data.append({
+                        'Day': day,
+                        'Champion': champ['name'],
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                        'Start Time': shift_pattern['display'],
+                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                        'Duration': f'{shift_pattern["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+            
             return pd.DataFrame(roster_data)
-        
+            
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
             # Fallback to simple roster generation
@@ -597,18 +591,19 @@ class CallCenterRosterOptimizer:
 
     def generate_fallback_roster(self, available_champions, days):
         roster_data = []
-        straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-        split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
         
         for champ in available_champions:
+            # Choose consistent shift pattern for the week
+            if champ['can_split'] and random.random() < 0.3:
+                split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                shift = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+            else:
+                straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                shift = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+            
             work_days = random.sample(days, 5)  # Each champ works 5 days
             
             for day in work_days:
-                if champ['can_split'] and random.random() < 0.3:
-                    shift = random.choice(split_shifts)
-                else:
-                    shift = random.choice(straight_shifts)
-                
                 roster_data.append({
                     'Day': day,
                     'Champion': champ['name'],
@@ -652,19 +647,27 @@ class CallCenterRosterOptimizer:
             if manual_splits:
                 roster_df = self.apply_manual_splits(roster_df, manual_splits)
 
+            # Use enhanced weekly off assignment with requests
             active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
-            roster_df, week_offs = self.assign_weekly_offs(roster_df, max_offs_per_day=4, min_split_champs=active_split_champs)
+            roster_df, week_offs = self.assign_weekly_offs_with_requests(
+                roster_df, 
+                analysis_data.get('leave_data', {}), 
+                max_offs_per_day=4, 
+                min_split_champs=active_split_champs
+            )
 
             return roster_df, week_offs
 
         except Exception as e:
             st.error(f"Error generating roster: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
             return None, None
 
     def fill_missing_days(self, roster_df, available_champions):
         """Ensure every champion has shifts for all working days"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
+        
         # Get current assignments
         current_assignments = {}
         for _, row in roster_df.iterrows():
@@ -673,32 +676,32 @@ class CallCenterRosterOptimizer:
             if champ not in current_assignments:
                 current_assignments[champ] = {}
             current_assignments[champ][day] = row.to_dict()
-    
+        
         # Fill missing days
         new_roster_data = []
         for champ in available_champions:
             champ_name = champ['name']
             champ_days = current_assignments.get(champ_name, {})
             work_days = list(champ_days.keys())
-        
+            
             # If champion has less than 5 days, add missing days
             if len(work_days) < 5:
                 missing_days = [day for day in days if day not in work_days]
                 num_days_to_add = min(5 - len(work_days), len(missing_days))
                 days_to_add = random.sample(missing_days, num_days_to_add)
-            
+                
                 for day in days_to_add:
                     # Assign appropriate shift
                     straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
                     split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                
+                    
                     if champ['can_split'] and random.random() < 0.3 and split_shifts:
                         shift = random.choice(split_shifts)
                     elif straight_shifts:
                         shift = random.choice(straight_shifts)
                     else:
                         shift = self.shift_patterns[0]  # Fallback
-                
+                    
                     new_roster_data.append({
                         'Day': day,
                         'Champion': champ_name,
@@ -713,11 +716,11 @@ class CallCenterRosterOptimizer:
                         'Gender': champ['gender'],
                         'Status': champ['status']
                     })
-        
+            
             # Add existing assignments
             for day, assignment in champ_days.items():
                 new_roster_data.append(assignment)
-    
+        
         return pd.DataFrame(new_roster_data)
 
     def get_available_champions(self, leave_data, specific_date=None):
@@ -849,9 +852,18 @@ class CallCenterRosterOptimizer:
 
     def show_editable_roster(self, roster_df, week_offs, leave_data):
         st.subheader("✏️ Edit Roster Manually")
-
+        
+        # Create a copy for editing
+        editable_df = roster_df.copy()
+        
+        # Add shift pattern options for easier editing
+        shift_options = {}
+        for pattern in self.shift_patterns:
+            shift_options[pattern['display']] = pattern
+        
+        # Create editable dataframe
         edited_df = st.data_editor(
-            roster_df,
+            editable_df,
             column_config={
                 "Champion": st.column_config.SelectboxColumn(
                     "Champion",
@@ -863,130 +875,58 @@ class CallCenterRosterOptimizer:
                     options=["Straight", "Split"],
                     required=True
                 ),
-                "Start Time": st.column_config.TextColumn(
+                "Start Time": st.column_config.SelectboxColumn(
                     "Start Time",
-                    help="Format: HH:MM to HH:MM or HH:MM to HH:MM & HH:MM to HH:MM for split shifts"
-                ),
-                "End Time": st.column_config.TextColumn(
-                    "End Time"
+                    options=list(shift_options.keys()),
+                    help="Select shift pattern"
                 )
             },
             hide_index=True,
             num_rows="dynamic",
-            use_container_width=True
-        )
-
-        st.subheader("📅 Edit Weekly Offs")
-        week_off_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-        week_off_editor_data = []
-        for champ, off_day in week_offs.items():
-            week_off_editor_data.append({
-                "Champion": champ,
-                "Current Day Off": off_day if off_day in week_off_days else "No day off"
-            })
-
-        week_off_df = pd.DataFrame(week_off_editor_data)
-
-        edited_week_offs = st.data_editor(
-            week_off_df,
-            column_config={
-                "Champion": st.column_config.SelectboxColumn(
-                    "Champion",
-                    options=[champ["name"] for champ in self.champions],
-                    required=True
-                ),
-                "Current Day Off": st.column_config.SelectboxColumn(
-                    "Day Off",
-                    options=week_off_days + ["No day off"],
-                    required=True
-                )
-            },
-            hide_index=True,
-            use_container_width=True
-        )
-
-        new_week_offs = {}
-        for _, row in edited_week_offs.iterrows():
-            if row["Current Day Off"] != "No day off":
-                new_week_offs[row["Champion"]] = row["Current Day Off"]
-
-        st.subheader("🏥 Edit Leave Information")
-        
-        today = datetime.now()
-        week_start = today - timedelta(days=today.weekday())
-        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-        week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        
-        st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
-        
-        leave_editor_data = []
-        for champ in self.champions:
-            champ_name = champ['name']
-            champ_data = {"Champion": champ_name}
-            
-            for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
-                champ_data[leave_type] = leave_data.get(champ_name, {}).get(leave_type.lower().replace(' ', '_'), 0)
-            
-            for i, day in enumerate(week_days):
-                date_str = week_dates[i]
-                champ_data[f"{day} ({date_str})"] = leave_data.get(champ_name, {}).get('date_specific', {}).get(date_str, "")
-            
-            leave_editor_data.append(champ_data)
-        
-        leave_df = pd.DataFrame(leave_editor_data)
-        
-        column_config = {
-            "Champion": st.column_config.SelectboxColumn(
-                "Champion",
-                options=[champ["name"] for champ in self.champions],
-                required=True
-            )
-        }
-        
-        for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
-            column_config[leave_type] = st.column_config.CheckboxColumn(leave_type)
-        
-        for i, day in enumerate(week_days):
-            date_str = week_dates[i]
-            column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
-                f"{day}",
-                options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
-                help=f"Leave for {date_str}"
-            )
-        
-        edited_leave_data = st.data_editor(
-            leave_df,
-            column_config=column_config,
-            hide_index=True,
             use_container_width=True,
-            height=500
+            key="roster_editor"
         )
         
-        new_leave_data = {}
-        for _, row in edited_leave_data.iterrows():
-            champ_name = row["Champion"]
-            leave_info = {
-                'sick_leave': row["Sick Leave"],
-                'casual_leave': row["Casual Leave"],
-                'period_leave': row["Period Leave"],
-                'annual_leave': row["Annual Leave"],
-                'comp_off': row["Comp Off"],
-                'maternity_leave': row["Maternity Leave"],
-                'date_specific': {}
-            }
-            
-            for i, day in enumerate(week_days):
-                date_str = week_dates[i]
-                leave_status = row[f"{day} ({date_str})"]
-                if leave_status:
-                    leave_info['date_specific'][date_str] = leave_status
-            
-            new_leave_data[champ_name] = leave_info
+        # If changes are detected, adjust the entire roster
+        if not edited_df.equals(editable_df):
+            st.info("🔄 Adjusting roster based on your changes...")
+            adjusted_df = self.adjust_roster_after_edit(edited_df)
+            return adjusted_df, week_offs, leave_data
+        
+        return edited_df, week_offs, leave_data
 
-        return edited_df, new_week_offs, new_leave_data
+    def adjust_roster_after_edit(self, edited_df):
+        """Adjust the entire roster after manual edits to maintain consistency"""
+        # Group by champion and ensure consistent shifts
+        adjusted_data = []
+        
+        for champ_name in edited_df['Champion'].unique():
+            champ_shifts = edited_df[edited_df['Champion'] == champ_name]
+            
+            # Get the most common shift pattern for this champion
+            if len(champ_shifts) > 0:
+                common_shift = champ_shifts['Start Time'].mode()
+                if len(common_shift) > 0:
+                    primary_shift = common_shift[0]
+                else:
+                    primary_shift = champ_shifts.iloc[0]['Start Time']
+                
+                # Apply consistent shift pattern
+                for _, row in champ_shifts.iterrows():
+                    new_row = row.copy()
+                    new_row['Start Time'] = primary_shift
+                    # Update End Time and Duration based on the shift pattern
+                    for pattern in self.shift_patterns:
+                        if pattern['display'] == primary_shift:
+                            new_row['End Time'] = f"{pattern['times'][-1]:02d}:00"
+                            new_row['Duration'] = f"{pattern['hours']} hours"
+                            new_row['Shift Type'] = 'Split' if pattern['type'] == 'split' else 'Straight'
+                            break
+                    adjusted_data.append(new_row)
+        
+        return pd.DataFrame(adjusted_data)
 
-    def assign_weekly_offs(self, roster_df, max_offs_per_day=4, min_split_champs=4):
+    def assign_weekly_offs_with_requests(self, roster_df, leave_data, max_offs_per_day=4, min_split_champs=4):
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         champions = roster_df['Champion'].unique()
 
@@ -994,46 +934,49 @@ class CallCenterRosterOptimizer:
         week_offs = {}
         offs_per_day = {day: 0 for day in days}
 
-        split_champs = []
-        for champ in champions:
-            champ_shifts = updated_roster[updated_roster['Champion'] == champ]
-            if any('Split' in shift_type for shift_type in champ_shifts['Shift Type']):
-                split_champs.append(champ)
-
+        # First, honor requested weekly offs
         for champion in champions:
+            requested_off = leave_data.get(champion, {}).get('requested_weekly_off', "")
+            if requested_off and requested_off in days and offs_per_day[requested_off] < max_offs_per_day:
+                week_offs[champion] = requested_off
+                offs_per_day[requested_off] += 1
+                updated_roster = updated_roster[
+                    ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == requested_off))
+                ]
+
+        # Then assign remaining offs
+        for champion in champions:
+            if champion in week_offs:
+                continue  # Already has an off day
+                
             champ_days = updated_roster[updated_roster['Champion'] == champion]['Day'].unique()
-
+            
             if len(champ_days) == 7:
-                available_off_days = []
-                for day in days:
-                    if offs_per_day[day] < max_offs_per_day:
-                        if champion in split_champs:
-                            split_champs_working = 0
-                            for split_champ in split_champs:
-                                if split_champ != champion and day in updated_roster[updated_roster['Champion'] == split_champ]['Day'].values:
-                                    split_champs_working += 1
-                            if split_champs_working >= min_split_champs:
-                                available_off_days.append(day)
-                        else:
-                            available_off_days.append(day)
-
+                # Champion works all days, need to assign an off day
+                available_off_days = [day for day in days if offs_per_day[day] < max_offs_per_day]
+                
                 if available_off_days:
                     day_off = random.choice(available_off_days)
                     week_offs[champion] = day_off
                     offs_per_day[day_off] += 1
-
                     updated_roster = updated_roster[
                         ~((updated_roster['Champion'] == champion) & (updated_roster['Day'] == day_off))
                     ]
                 else:
                     week_offs[champion] = "No day off (max reached)"
             else:
+                # Champion already has some days off
                 working_days = set(champ_days)
                 all_days = set(days)
-                day_off = list(all_days - working_days)[0] if all_days - working_days else "No day off"
-                week_offs[champion] = day_off
-                if day_off in days:
-                    offs_per_day[day_off] += 1
+                available_offs = list(all_days - working_days)
+                
+                if available_offs:
+                    day_off = available_offs[0]
+                    week_offs[champion] = day_off
+                    if day_off in days:
+                        offs_per_day[day_off] += 1
+                else:
+                    week_offs[champion] = "No day off"
 
         return updated_roster, week_offs
 
@@ -1245,6 +1188,247 @@ class CallCenterRosterOptimizer:
 
         return validation_results
 
+    def show_leave_management(self, leave_data):
+        st.subheader("🏥 Leave & Weekly Off Management")
+        
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday())
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
+        
+        # Create leave editor data
+        leave_editor_data = []
+        for champ in self.champions:
+            champ_name = champ['name']
+            champ_data = {
+                "Champion": champ_name,
+                "Requested Weekly Off": leave_data.get(champ_name, {}).get('requested_weekly_off', "")
+            }
+            
+            # Add leave types
+            for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
+                leave_key = leave_type.lower().replace(' ', '_')
+                champ_data[leave_type] = leave_data.get(champ_name, {}).get(leave_key, 0)
+            
+            # Add daily leave status
+            for i, day in enumerate(week_days):
+                date_str = week_dates[i]
+                day_key = f"{day} ({date_str})"
+                champ_data[day_key] = leave_data.get(champ_name, {}).get('date_specific', {}).get(date_str, "")
+            
+            leave_editor_data.append(champ_data)
+        
+        leave_df = pd.DataFrame(leave_editor_data)
+        
+        # Configure columns
+        column_config = {
+            "Champion": st.column_config.SelectboxColumn(
+                "Champion",
+                options=[champ["name"] for champ in self.champions],
+                required=True
+            ),
+            "Requested Weekly Off": st.column_config.SelectboxColumn(
+                "Requested Weekly Off",
+                options=[""] + week_days,
+                help="Champion's requested weekly off day"
+            )
+        }
+        
+        for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
+            column_config[leave_type] = st.column_config.NumberColumn(
+                leave_type,
+                min_value=0,
+                max_value=10,
+                help=f"Number of {leave_type} days"
+            )
+        
+        for i, day in enumerate(week_days):
+            date_str = week_dates[i]
+            column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
+                f"{day}",
+                options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
+                help=f"Leave for {date_str}"
+            )
+        
+        edited_leave_data = st.data_editor(
+            leave_df,
+            column_config=column_config,
+            hide_index=True,
+            use_container_width=True,
+            height=600,
+            key="leave_editor"
+        )
+        
+        # Process the edited leave data
+        new_leave_data = {}
+        for _, row in edited_leave_data.iterrows():
+            champ_name = row["Champion"]
+            leave_info = {
+                'requested_weekly_off': row["Requested Weekly Off"],
+                'sick_leave': row["Sick Leave"],
+                'casual_leave': row["Casual Leave"],
+                'period_leave': row["Period Leave"],
+                'annual_leave': row["Annual Leave"],
+                'comp_off': row["Comp Off"],
+                'maternity_leave': row["Maternity Leave"],
+                'date_specific': {}
+            }
+            
+            for i, day in enumerate(week_days):
+                date_str = week_dates[i]
+                leave_status = row[f"{day} ({date_str})"]
+                if leave_status:
+                    leave_info['date_specific'][date_str] = leave_status
+            
+            new_leave_data[champ_name] = leave_info
+        
+        return new_leave_data
+
+    def format_excel_for_download(self, roster_df, week_offs, leave_data, analysis_data):
+        """Format the Excel file to match the desired image format"""
+        # Create a new workbook
+        wb = openpyxl.Workbook()
+        
+        # Remove default sheet
+        if 'Sheet' in wb.sheetnames:
+            del wb['Sheet']
+        
+        # Create Roster sheet with formatted layout
+        ws_roster = wb.create_sheet("Roster")
+        
+        # Add headers
+        headers = ["Name", "Status", "Primary Language", "Secondary Languages", "Shift"] + \
+                 ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws_roster.cell(row=1, column=col_idx, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Add champion data
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday())
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        
+        row_idx = 2
+        for champ in self.champions:
+            # Basic info
+            ws_roster.cell(row=row_idx, column=1, value=champ['name'])
+            ws_roster.cell(row=row_idx, column=2, value=champ['status'])
+            ws_roster.cell(row=row_idx, column=3, value=champ['primary_lang'].upper())
+            ws_roster.cell(row=row_idx, column=4, value=', '.join([lang.upper() for lang in champ['secondary_langs']]))
+            
+            # Get shift information from roster
+            champ_shifts = roster_df[roster_df['Champion'] == champ['name']]
+            if not champ_shifts.empty:
+                shift_time = champ_shifts.iloc[0]['Start Time']
+                ws_roster.cell(row=row_idx, column=5, value=shift_time)
+            
+            # Add daily schedule
+            for col_idx, day in enumerate(days, 6):
+                day_schedule = ""
+                
+                # Check for weekly off
+                if week_offs.get(champ['name'], "") == day:
+                    day_schedule = "WO"
+                else:
+                    # Check for shifts
+                    day_shift = champ_shifts[champ_shifts['Day'] == day]
+                    if not day_shift.empty:
+                        day_schedule = day_shift.iloc[0]['Start Time']
+                
+                # Check for leaves
+                champ_leave = leave_data.get(champ['name'], {})
+                date_str = week_dates[col_idx - 6]
+                date_leave = champ_leave.get('date_specific', {}).get(date_str, "")
+                
+                if date_leave:
+                    day_schedule = date_leave
+                
+                ws_roster.cell(row=row_idx, column=col_idx, value=day_schedule)
+            
+            row_idx += 1
+        
+        # Apply formatting
+        for row in ws_roster.iter_rows(min_row=1, max_row=ws_roster.max_row, max_col=ws_roster.max_column):
+            for cell in row:
+                cell.border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                                   top=Side(style='thin'), bottom=Side(style='thin'))
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Auto-adjust column widths
+        for column in ws_roster.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 30)
+            ws_roster.column_dimensions[column_letter].width = adjusted_width
+        
+        # Add Analysis sheet
+        ws_analysis = wb.create_sheet("Analysis")
+        
+        # Add hourly analysis
+        ws_analysis.cell(row=1, column=1, value="Hourly Analysis").font = Font(bold=True, size=14)
+        
+        hourly_headers = ["Hour", "Forecasted Calls", "Required Agents", "Scheduled Agents", "Predicted AL"]
+        for col_idx, header in enumerate(hourly_headers, 1):
+            ws_analysis.cell(row=2, column=col_idx, value=header).font = Font(bold=True)
+        
+        row_idx = 3
+        for hour in self.operation_hours:
+            if hour in analysis_data['hourly_volume']:
+                forecast = analysis_data['hourly_volume'][hour]
+                required = self.agents_needed_for_target(forecast, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
+                
+                # Count scheduled agents for this hour
+                scheduled = 0
+                for day in days:
+                    day_roster = roster_df[roster_df['Day'] == day]
+                    for _, row in day_roster.iterrows():
+                        if self.is_agent_working_at_hour(row, hour):
+                            scheduled += 1
+                
+                predicted_al, _, _ = self.predict_al(forecast, scheduled, self.AVERAGE_HANDLING_TIME_SECONDS)
+                
+                ws_analysis.cell(row=row_idx, column=1, value=f"{hour}:00")
+                ws_analysis.cell(row=row_idx, column=2, value=forecast)
+                ws_analysis.cell(row=row_idx, column=3, value=required)
+                ws_analysis.cell(row=row_idx, column=4, value=scheduled)
+                ws_analysis.cell(row=row_idx, column=5, value=f"{predicted_al}%")
+                
+                row_idx += 1
+        
+        # Add summary metrics
+        metrics = self.calculate_coverage(roster_df, analysis_data)
+        answer_rate = self.calculate_answer_rate(roster_df, analysis_data)
+        
+        ws_analysis.cell(row=row_idx+2, column=1, value="Summary Metrics").font = Font(bold=True, size=14)
+        ws_analysis.cell(row=row_idx+3, column=1, value="Total Weekly Capacity")
+        ws_analysis.cell(row=row_idx+3, column=2, value=metrics['total_capacity'])
+        ws_analysis.cell(row=row_idx+4, column=1, value="Required Capacity")
+        ws_analysis.cell(row=row_idx+4, column=2, value=metrics['required_capacity'])
+        ws_analysis.cell(row=row_idx+5, column=1, value="Utilization Rate")
+        ws_analysis.cell(row=row_idx+5, column=2, value=f"{metrics['utilization_rate']}%")
+        ws_analysis.cell(row=row_idx+6, column=1, value="Expected Answer Rate")
+        ws_analysis.cell(row=row_idx+6, column=2, value=f"{answer_rate}%")
+        
+        # Save to buffer
+        excel_buffer = BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        return excel_buffer.getvalue()
+
     def show_champion_editor(self):
         """Show champion editor interface"""
         st.markdown('<div class="editor-section">', unsafe_allow_html=True)
@@ -1393,6 +1577,8 @@ def initialize_session_state():
         st.session_state.selected_languages = []
     if 'show_champion_editor' not in st.session_state:
         st.session_state.show_champion_editor = False
+    if 'show_leave_editor' not in st.session_state:
+        st.session_state.show_leave_editor = False
 
 # Main application
 def main():
@@ -1539,6 +1725,10 @@ def main():
         if st.button("👥 Edit Champions"):
             st.session_state.show_champion_editor = not st.session_state.show_champion_editor
         
+        # Leave editor toggle
+        if st.button("🏥 Edit Leaves & Weekly Offs"):
+            st.session_state.show_leave_editor = not st.session_state.show_leave_editor
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Main content area
@@ -1608,6 +1798,10 @@ def main():
     # Show champion editor if toggled
     if st.session_state.show_champion_editor:
         optimizer.show_champion_editor()
+    
+    # Show leave editor if toggled
+    if st.session_state.show_leave_editor:
+        st.session_state.leave_data = optimizer.show_leave_management(st.session_state.leave_data)
     
     # Display results if available
     if st.session_state.roster_df is not None:
@@ -1692,17 +1886,18 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Export roster to Excel
-            excel_buffer = BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                st.session_state.roster_df.to_excel(writer, sheet_name='Roster', index=False)
-                if st.session_state.hourly_al_results:
-                    hourly_al_df.to_excel(writer, sheet_name='Hourly_AL_Analysis', index=False)
+            # Export roster to Excel with formatted layout
+            excel_data = optimizer.format_excel_for_download(
+                st.session_state.roster_df, 
+                st.session_state.week_offs, 
+                st.session_state.leave_data,
+                st.session_state.analysis_data
+            )
             
             st.download_button(
-                "📊 Download Roster as Excel",
-                excel_buffer.getvalue(),
-                "call_center_roster.xlsx",
+                "📊 Download Formatted Roster",
+                excel_data,
+                "call_center_roster_formatted.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
