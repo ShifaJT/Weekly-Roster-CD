@@ -351,6 +351,16 @@ class CallCenterRosterOptimizer:
             'Status': [champ['status'] for champ in self.champions]
         })
 
+        # Add language-specific call data
+        language_data = pd.DataFrame({
+            'Hour': list(range(7, 22)),
+            'ka': [0] * 15,  # Kannada
+            'hi': [0] * 15,  # Hindi
+            'te': [0] * 15,  # Telugu
+            'ta': [0] * 15,  # Tamil
+            'en': [0] * 15   # English
+        })
+
         instructions = pd.DataFrame({
             'Instruction': [
                 'INSTRUCTIONS:',
@@ -359,8 +369,9 @@ class CallCenterRosterOptimizer:
                 '3. If you only have daily totals, use the Daily_Data sheet',
                 '4. Add leave information in the Leave_Data sheet (0=no leave, 1=on leave)',
                 '5. Update champion information in the Champion_Data sheet if needed',
-                '6. Save the file and upload it back to the app',
-                '7. The app will analyze your data and generate an optimized roster',
+                '6. Add language-specific call volumes in Language_Data sheet',
+                '7. Save the file and upload it back to the app',
+                '8. The app will analyze your data and generate an optimized roster',
                 '',
                 'CHAMPION_DATA SHEET:',
                 '- Name: Champion name',
@@ -381,6 +392,14 @@ class CallCenterRosterOptimizer:
                 '- Peak_Hour: Hour with highest call volume (7-21)',
                 '- Peak_Volume: Number of calls during peak hour',
                 '',
+                'LANGUAGE_DATA SHEET:',
+                '- Hour: Operation hour (7 to 21)',
+                '- ka: Kannada calls per hour',
+                '- hi: Hindi calls per hour',
+                '- te: Telugu calls per hour',
+                '- ta: Tamil calls per hour',
+                '- en: English calls per hour',
+                '',
                 'LEAVE_DATA SHEET:',
                 '- Champion: Name of the agent',
                 '- Sick_Leave: 1 if on sick leave, 0 otherwise',
@@ -399,6 +418,7 @@ class CallCenterRosterOptimizer:
             hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
             daily_data.to_excel(writer, sheet_name='Daily_Data', index=False)
             leave_data.to_excel(writer, sheet_name='Leave_Data', index=False)
+            language_data.to_excel(writer, sheet_name='Language_Data', index=False)
 
         return excel_buffer.getvalue()
 
@@ -489,6 +509,21 @@ class CallCenterRosterOptimizer:
                         'total_daily_calls': avg_daily_calls
                     }
 
+            # Add language-specific call analysis
+            if 'Language_Data' in xls.sheet_names:
+                try:
+                    df = pd.read_excel(uploaded_file, sheet_name='Language_Data', engine='openpyxl')
+                except:
+                    df = pd.read_excel(uploaded_file, sheet_name='Language_Data')
+                
+                if 'Hour' in df.columns:
+                    language_volume = {}
+                    for lang in self.available_languages:
+                        if lang in df.columns:
+                            language_volume[lang] = dict(zip(df['Hour'], df[lang]))
+                    
+                    analysis_data['language_volume'] = language_volume
+
             if 'Leave_Data' in xls.sheet_names:
                 try:
                     df = pd.read_excel(uploaded_file, sheet_name='Leave_Data', engine='openpyxl')
@@ -534,6 +569,100 @@ class CallCenterRosterOptimizer:
             'total_daily_calls': 3130
         }
 
+    def optimize_roster_with_languages(self, analysis_data, available_champions):
+        """Optimize roster considering language-specific call volumes"""
+        if 'language_volume' not in analysis_data:
+            return self.optimize_roster_for_call_flow(analysis_data, available_champions)
+        
+        try:
+            hourly_volume = analysis_data['hourly_volume']
+            language_volume = analysis_data['language_volume']
+            
+            # Calculate language-specific requirements
+            language_requirements = {}
+            for lang in self.available_languages:
+                if lang in language_volume:
+                    language_requirements[lang] = {}
+                    for hour, calls in language_volume[lang].items():
+                        language_requirements[lang][hour] = self.agents_needed_for_target(
+                            calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS
+                        )
+            
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            roster_data = []
+            
+            # Group champions by language skills
+            lang_champions = {}
+            for lang in self.available_languages:
+                lang_champions[lang] = [
+                    champ for champ in available_champions 
+                    if champ['primary_lang'] == lang or lang in champ['secondary_langs']
+                ]
+            
+            # Assign shifts based on language requirements
+            for day in days:
+                # For each hour, assign champions with required language skills
+                for hour in self.operation_hours:
+                    total_required = self.agents_needed_for_target(
+                        hourly_volume.get(hour, 0), self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS
+                    )
+                    
+                    # Calculate language-specific requirements for this hour
+                    lang_requirements = {}
+                    for lang in self.available_languages:
+                        if lang in language_requirements:
+                            lang_requirements[lang] = language_requirements[lang].get(hour, 0)
+                    
+                    # Assign champions based on language needs
+                    assigned_champs = set()
+                    for lang, req_count in lang_requirements.items():
+                        if req_count > 0 and lang in lang_champions:
+                            lang_speakers = [c for c in lang_champions[lang] if c['name'] not in assigned_champs]
+                            for champ in lang_speakers[:min(req_count, len(lang_speakers))]:
+                                # Assign shift that covers this hour
+                                shift_pattern = self.get_appropriate_shift(champ, hour)
+                                roster_data.append({
+                                    'Day': day,
+                                    'Champion': champ['name'],
+                                    'Primary Language': champ['primary_lang'].upper(),
+                                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                                    'Start Time': shift_pattern['display'],
+                                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                                    'Duration': f'{shift_pattern["hours"]} hours',
+                                    'Calls/Hour Capacity': champ['calls_per_hour'],
+                                    'Can Split': 'Yes' if champ['can_split'] else 'No',
+                                    'Gender': champ['gender'],
+                                    'Status': champ['status']
+                                })
+                                assigned_champs.add(champ['name'])
+            
+            return pd.DataFrame(roster_data)
+            
+        except Exception as e:
+            st.error(f"Language optimization error: {str(e)}")
+            return self.optimize_roster_for_call_flow(analysis_data, available_champions)
+
+    def get_appropriate_shift(self, champ, target_hour):
+        """Get appropriate shift pattern considering gender constraints"""
+        # For female champions who cannot split, ensure shift ends by 7 PM
+        if champ['gender'] == 'F' and not champ['can_split']:
+            # Find shifts that end by 7 PM
+            appropriate_shifts = [
+                s for s in self.shift_patterns 
+                if s['times'][-1] <= 19 and self.is_hour_in_shift(target_hour, s)
+            ]
+            if appropriate_shifts:
+                return random.choice(appropriate_shifts)
+        
+        # For other cases, use normal logic
+        if champ['can_split'] and random.random() < 0.3:
+            split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+            return random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+        else:
+            straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+            return random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
             hourly_volume = analysis_data['hourly_volume']
@@ -555,12 +684,16 @@ class CallCenterRosterOptimizer:
             
             # Assign consistent shifts for each champion throughout the week
             for champ in sorted_champs:
-                # Choose appropriate shift pattern for the entire week
-                if champ['can_split'] and random.random() < 0.3:
-                    split_shifts = [p for p in self.shift_patterns if p['type'] == 'split']
+                # Choose appropriate shift pattern considering gender constraints
+                if champ['gender'] == 'F' and not champ['can_split']:
+                    # Female champions who cannot split - only assign shifts ending by 7 PM
+                    appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
+                    shift_pattern = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
+                elif champ['can_split'] and random.random() < 0.3:
+                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
                     shift_pattern = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
                 else:
-                    straight_shifts = [p for p in self.shift_patterns if p['type'] == 'straight']
+                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
                     shift_pattern = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
                 
                 # Assign this shift pattern for 5 days
@@ -593,8 +726,11 @@ class CallCenterRosterOptimizer:
         roster_data = []
         
         for champ in available_champions:
-            # Choose consistent shift pattern for the week
-            if champ['can_split'] and random.random() < 0.3:
+            # Choose consistent shift pattern for the week considering gender constraints
+            if champ['gender'] == 'F' and not champ['can_split']:
+                appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
+                shift = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
+            elif champ['can_split'] and random.random() < 0.3:
                 split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
                 shift = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
             else:
@@ -637,7 +773,11 @@ class CallCenterRosterOptimizer:
                                      if champ['primary_lang'] in selected_languages 
                                      or any(lang in selected_languages for lang in champ['secondary_langs'])]
             
-            roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
+            # Use language-aware optimization if language data is available
+            if 'language_volume' in analysis_data:
+                roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
+            else:
+                roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
             
             # Ensure no blank cells - fill missing days
             roster_df = self.fill_missing_days(roster_df, available_champions)
@@ -665,7 +805,7 @@ class CallCenterRosterOptimizer:
             return None, None
 
     def fill_missing_days(self, roster_df, available_champions):
-        """Ensure every champion has shifts for all working days"""
+        """Ensure every champion has shifts for all working days and handle blank cells"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
         # Get current assignments
@@ -691,16 +831,16 @@ class CallCenterRosterOptimizer:
                 days_to_add = random.sample(missing_days, num_days_to_add)
                 
                 for day in days_to_add:
-                    # Assign appropriate shift
-                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                    
-                    if champ['can_split'] and random.random() < 0.3 and split_shifts:
-                        shift = random.choice(split_shifts)
-                    elif straight_shifts:
-                        shift = random.choice(straight_shifts)
+                    # Assign appropriate shift considering gender constraints
+                    if champ['gender'] == 'F' and not champ['can_split']:
+                        appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
+                        shift = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
+                    elif champ['can_split'] and random.random() < 0.3:
+                        split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                        shift = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
                     else:
-                        shift = self.shift_patterns[0]  # Fallback
+                        straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                        shift = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
                     
                     new_roster_data.append({
                         'Day': day,
@@ -1188,7 +1328,42 @@ class CallCenterRosterOptimizer:
 
         return validation_results
 
+    def validate_female_shifts(self, roster_df):
+        """Validate that female champions who cannot split don't work past 7 PM"""
+        validation_results = {}
+        
+        female_champs = [champ for champ in self.champions if champ['gender'] == 'F' and not champ['can_split']]
+        
+        for champ in female_champs:
+            champ_shifts = roster_df[roster_df['Champion'] == champ['name']]
+            violations = []
+            
+            for _, row in champ_shifts.iterrows():
+                # Check if shift ends after 7 PM
+                if 'End Time' in row and row['End Time']:
+                    try:
+                        end_time = int(row['End Time'].split(':')[0])
+                        if end_time > 19:  # 7 PM
+                            violations.append(f"{row['Day']}: ends at {row['End Time']}")
+                    except:
+                        pass
+            
+            validation_results[champ['name']] = {
+                'violations': violations,
+                'status': '✅ OK' if not violations else '❌ Violations'
+            }
+        
+        return validation_results
+
     def show_leave_management(self, leave_data):
+        """Show leave management interface with close button"""
+        st.markdown('<div class="editor-section">', unsafe_allow_html=True)
+        
+        # Close button
+        if st.button("❌ Close Leave Editor", key="close_leave_editor"):
+            st.session_state.show_leave_editor = False
+            st.rerun()
+        
         st.subheader("🏥 Leave & Weekly Off Management")
         
         today = datetime.now()
@@ -1284,6 +1459,7 @@ class CallCenterRosterOptimizer:
             
             new_leave_data[champ_name] = leave_info
         
+        st.markdown('</div>', unsafe_allow_html=True)
         return new_leave_data
 
     def format_excel_for_download(self, roster_df, week_offs, leave_data, analysis_data):
@@ -1430,8 +1606,14 @@ class CallCenterRosterOptimizer:
         return excel_buffer.getvalue()
 
     def show_champion_editor(self):
-        """Show champion editor interface"""
+        """Show champion editor interface with close button"""
         st.markdown('<div class="editor-section">', unsafe_allow_html=True)
+        
+        # Close button
+        if st.button("❌ Close Editor", key="close_champ_editor"):
+            st.session_state.show_champion_editor = False
+            st.rerun()
+        
         st.subheader("👥 Champion Management")
         
         # Convert champions to DataFrame for editing
@@ -1847,6 +2029,17 @@ def main():
             for day, result in al_validation.items():
                 st.write(f"{day}: {result['expected_al']:.1f}% - {result['status']}")
         
+        # Female champion shift validation
+        st.subheader("👩 Female Champion Shift Validation")
+        female_validation = optimizer.validate_female_shifts(st.session_state.roster_df)
+        for champ, result in female_validation.items():
+            if result['violations']:
+                st.error(f"{champ}: {result['status']}")
+                for violation in result['violations']:
+                    st.write(f"  - {violation}")
+            else:
+                st.success(f"{champ}: {result['status']}")
+        
         # Display formatted roster
         st.subheader("👥 Weekly Roster Schedule")
         
@@ -1930,6 +2123,7 @@ def main():
             - **Daily_Data**: Add daily totals and peak information
             - **Leave_Data**: Mark which agents are on leave
             - **Champion_Data**: Update champion names and languages
+            - **Language_Data**: Add language-specific call volumes
             """)
             
         with col2:
