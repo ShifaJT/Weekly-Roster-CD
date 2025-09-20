@@ -289,30 +289,37 @@ class CallCenterRosterOptimizer:
 
         return hourly_al_results
 
-    def is_agent_working_at_hour(self, row, hour):
-        """Check if an agent is working at a specific hour - FIXED VERSION"""
-        try:
-            shift_time = row['Start Time']
+def is_agent_working_at_hour(self, row, hour):
+    """Check if an agent is working at a specific hour - IMPROVED VERSION"""
+    try:
+        if pd.isna(row['Start Time']):
+            return False
             
-            # Handle straight shifts
-            if '&' not in shift_time:
-                times = shift_time.split(' to ')
+        shift_time = row['Start Time']
+        
+        # Handle straight shifts
+        if '&' not in shift_time:
+            times = shift_time.split(' to ')
+            if len(times) >= 2:
                 start_hour = int(times[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
+                # Check if hour is within shift (inclusive start, exclusive end)
                 return start_hour <= hour < end_hour
-            
-            # Handle split shifts
-            else:
-                shifts = shift_time.split(' & ')
-                for shift in shifts:
-                    times = shift.split(' to ')
+        
+        # Handle split shifts
+        else:
+            shifts = shift_time.split(' & ')
+            for shift in shifts:
+                times = shift.split(' to ')
+                if len(times) >= 2:
                     start_hour = int(times[0].split(':')[0])
                     end_hour = int(times[1].split(':')[0])
                     if start_hour <= hour < end_hour:
                         return True
-                return False
-        except Exception as e:
-            return False
+        return False
+        
+    except Exception as e:
+        return False
 
     def get_al_status(self, al_value):
         if al_value >= self.TARGET_AL:
@@ -756,85 +763,147 @@ class CallCenterRosterOptimizer:
             st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
 
-    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=4):
-        """Ensure each day has between min_champs and max_champs working at 7 AM"""
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=4):
+    """Ensure each day has between min_champs and max_champs working at 7 AM"""
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # First validate current coverage
+    coverage = self.validate_morning_coverage(roster_df)
+    
+    for day in days:
+        day_result = coverage[day]
+        morning_champs = day_result['morning_champs']
         
-        for day in days:
-            day_roster = roster_df[roster_df['Day'] == day]
-            morning_champs = 0
+        # Get list of morning workers for this day
+        day_roster = roster_df[roster_df['Day'] == day]
+        morning_workers = []
+        for idx, row in day_roster.iterrows():
+            if self.is_agent_working_at_hour(row, 7):
+                morning_workers.append((idx, row['Champion']))
+        
+        # Adjust if needed
+        if morning_champs < min_champs:
+            # Need to add more morning champions
+            needed = min_champs - morning_champs
+            self.add_morning_champions(roster_df, day, needed, morning_workers)
+        elif morning_champs > max_champs:
+            # Need to reduce morning champions
+            excess = morning_champs - max_champs
+            self.reduce_morning_champions(roster_df, day, excess, morning_workers)
+    
+    return roster_df
+
+def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
+    """Add morning champions to a specific day"""
+    # Get champions already working this day
+    day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
+    existing_morning_names = [name for _, name in existing_morning_workers]
+    
+    # Find available champions who can work mornings
+    available_champs = []
+    for champ in self.champions:
+        if (champ['name'] not in day_workers and  # Not already working this day
+            champ['status'] == 'Active' and  # Only active champions
+            champ['name'] not in existing_morning_names):  # Not already a morning worker
             
-            # Count current morning champions
-            for _, row in day_roster.iterrows():
-                if self.is_agent_working_at_hour(row, 7):  # 7 AM
-                    morning_champs += 1
+            # Check if champion can work morning shifts based on gender constraints
+            if self.can_work_morning_shift(champ):
+                available_champs.append(champ)
+    
+    # Add morning workers
+    for i in range(min(count_needed, len(available_champs))):
+        champ = available_champs[i]
+        morning_shift = self.get_morning_shift_for_champ(champ)
+        
+        if morning_shift:
+            new_row = {
+                'Day': day,
+                'Champion': champ['name'],
+                'Primary Language': champ['primary_lang'].upper(),
+                'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                'Shift Type': 'Split' if morning_shift['type'] == 'split' else 'Straight',
+                'Start Time': morning_shift['display'],
+                'End Time': f"{morning_shift['times'][-1]:02d}:00",
+                'Duration': f'{morning_shift["hours"]} hours',
+                'Calls/Hour Capacity': champ['calls_per_hour'],
+                'Can Split': 'Yes' if champ['can_split'] else 'No',
+                'Gender': champ['gender'],
+                'Status': champ['status']
+            }
             
-            # Adjust if needed
-            if morning_champs < min_champs:
-                # Need to add more morning champions
-                self.add_morning_champions(roster_df, day, min_champs - morning_champs)
-            elif morning_champs > max_champs:
-                # Need to reduce morning champions
-                self.reduce_morning_champions(roster_df, day, morning_champs - max_champs)
-        
-        return roster_df
+            # Add to roster
+            roster_df = pd.concat([roster_df, pd.DataFrame([new_row])], ignore_index=True)
 
-    def add_morning_champions(self, roster_df, day, count_needed):
-        """Add morning champions to a specific day"""
-        # Find champions not working at 7 AM on this day but available
-        day_champs = roster_df[roster_df['Day'] == day]['Champion'].unique()
-        
-        for champ_name in day_champs:
-            if count_needed <= 0:
-                break
-                
-            champ_row = roster_df[(roster_df['Champion'] == champ_name) & (roster_df['Day'] == day)]
-            if not champ_row.empty:
-                row_idx = champ_row.index[0]
-                current_shift = roster_df.at[row_idx, 'Start Time']
-                
-                # Check if this champion is not already working at 7 AM
-                if not self.is_agent_working_at_hour(roster_df.iloc[row_idx], 7):
-                    # Change to a morning shift
-                    champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
-                    if champ_data:
-                        morning_shifts = [s for s in self.shift_patterns 
-                                        if s['times'][0] <= 7 and s['times'][-1] <= (19 if champ_data['gender'] == 'F' and not champ_data['can_split'] else 21)]
-                        
-                        if morning_shifts:
-                            new_shift = morning_shifts[hash(champ_name) % len(morning_shifts)]
-                            roster_df.at[row_idx, 'Start Time'] = new_shift['display']
-                            roster_df.at[row_idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
-                            roster_df.at[row_idx, 'Duration'] = f'{new_shift["hours"]} hours'
-                            roster_df.at[row_idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
-                            count_needed -= 1
+def reduce_morning_champions(self, roster_df, day, count_to_reduce, morning_workers):
+    """Reduce morning champions on a specific day"""
+    # Sort by shift type: split shift workers first (keep them), straight shifts second
+    split_workers = []
+    straight_workers = []
+    
+    for idx, champ_name in morning_workers:
+        row = roster_df.loc[idx]
+        if row['Shift Type'] == 'Split':
+            split_workers.append((idx, champ_name))
+        else:
+            straight_workers.append((idx, champ_name))
+    
+    # First remove straight shift workers, then split if needed
+    workers_to_adjust = straight_workers[:count_to_reduce]
+    remaining = count_to_reduce - len(workers_to_adjust)
+    
+    if remaining > 0:
+        workers_to_adjust.extend(split_workers[:remaining])
+    
+    # Change these workers to non-morning shifts
+    for idx, champ_name in workers_to_adjust:
+        champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
+        if champ_data:
+            non_morning_shift = self.get_non_morning_shift_for_champ(champ_data)
+            if non_morning_shift:
+                roster_df.at[idx, 'Start Time'] = non_morning_shift['display']
+                roster_df.at[idx, 'End Time'] = f"{non_morning_shift['times'][-1]:02d}:00"
+                roster_df.at[idx, 'Duration'] = f'{non_morning_shift["hours"]} hours'
+                roster_df.at[idx, 'Shift Type'] = 'Split' if non_morning_shift['type'] == 'split' else 'Straight'
 
-    def reduce_morning_champions(self, roster_df, day, count_to_reduce):
-        """Reduce morning champions on a specific day"""
-        day_indices = roster_df[roster_df['Day'] == day].index
-        
-        for idx in day_indices:
-            if count_to_reduce <= 0:
-                break
-                
-            if self.is_agent_working_at_hour(roster_df.iloc[idx], 7):
-                champ_name = roster_df.at[idx, 'Champion']
-                champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
-                
-                if champ_data:
-                    # Change to a non-morning shift
-                    non_morning_shifts = [s for s in self.shift_patterns 
-                                         if s['times'][0] > 7 and 
-                                         s['times'][-1] <= (19 if champ_data['gender'] == 'F' and not champ_data['can_split'] else 21)]
-                    
-                    if non_morning_shifts:
-                        new_shift = non_morning_shifts[hash(champ_name) % len(non_morning_shifts)]
-                        roster_df.at[idx, 'Start Time'] = new_shift['display']
-                        roster_df.at[idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
-                        roster_df.at[idx, 'Duration'] = f'{new_shift["hours"]} hours'
-                        roster_df.at[idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
-                        count_to_reduce -= 1
+def can_work_morning_shift(self, champ):
+    """Check if champion can work a morning shift based on gender constraints"""
+    if champ['gender'] == 'F' and not champ['can_split']:
+        # Female who can't split - only early shifts ending by 7 PM
+        return any(s['times'][0] <= 8 and s['times'][-1] <= 19 for s in self.shift_patterns)
+    else:
+        # Male or female who can split - more flexible
+        return any(s['times'][0] <= 8 for s in self.shift_patterns)
 
+def get_morning_shift_for_champ(self, champ):
+    """Get appropriate morning shift for a champion"""
+    if champ['gender'] == 'F' and not champ['can_split']:
+        # Female who can't split - early shifts ending by 7 PM
+        morning_shifts = [s for s in self.shift_patterns 
+                         if s['times'][0] <= 8 and s['times'][-1] <= 19]
+    else:
+        # Male or female who can split
+        morning_shifts = [s for s in self.shift_patterns 
+                         if s['times'][0] <= 8]
+    
+    if morning_shifts:
+        return morning_shifts[hash(champ['name']) % len(morning_shifts)]
+    return None
+
+def get_non_morning_shift_for_champ(self, champ):
+    """Get appropriate non-morning shift for a champion"""
+    if champ['gender'] == 'F' and not champ['can_split']:
+        # Female who can't split - shifts starting after 9 AM but ending by 7 PM
+        non_morning_shifts = [s for s in self.shift_patterns 
+                             if s['times'][0] >= 9 and s['times'][-1] <= 19]
+    else:
+        # Male or female who can split
+        non_morning_shifts = [s for s in self.shift_patterns 
+                             if s['times'][0] >= 9]
+    
+    if non_morning_shifts:
+        return non_morning_shifts[hash(champ['name']) % len(non_morning_shifts)]
+    return None
+    
     def optimize_roster_with_languages(self, analysis_data, available_champions):
         """
         Optimize roster considering language-specific call volumes
