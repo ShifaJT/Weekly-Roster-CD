@@ -1130,7 +1130,7 @@ class CallCenterRosterOptimizer:
             
                 if valid_offs:
                     # Choose the day with the least current offs to balance distribution
-                                        valid_offs.sort(key=lambda x: offs_per_day[x])
+                    valid_offs.sort(key=lambda x: offs_per_day[x])
                     day_off = valid_offs[0]
                     week_offs[champion] = day_off
                     offs_per_day[day_off] += 1
