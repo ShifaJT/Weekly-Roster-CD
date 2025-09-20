@@ -499,7 +499,7 @@ class CallCenterRosterOptimizer:
 
                     if 'Peak_Hour' in df.columns and 'Peak_Volume' in df.columns:
                         avg_peak_hour = df['Peak_Hour'].mode()[0] if not df['Peak_Hour'].mode().empty else 11
-                                                peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
+                        peak_hours = [avg_peak_hour - 1, avg_peak_hour, avg_peak_hour + 1, avg_peak_hour + 2]
                     else:
                         peak_hours = [11, 12, 13, 14]
 
