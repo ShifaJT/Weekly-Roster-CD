@@ -584,7 +584,9 @@ class CallCenterRosterOptimizer:
                 if lang in language_volume:
                     language_requirements[lang] = {}
                     for hour, calls in language_volume[lang].items():
-                        language_requirements[lang][hour] = self.agents_needed_for_target(
+                        # Ensure hour is integer
+                        hour_int = int(hour) if not isinstance(hour, int) else hour
+                        language_requirements[lang][hour_int] = self.agents_needed_for_target(
                             calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS
                         )
             
@@ -618,7 +620,9 @@ class CallCenterRosterOptimizer:
                     for lang, req_count in lang_requirements.items():
                         if req_count > 0 and lang in lang_champions:
                             lang_speakers = [c for c in lang_champions[lang] if c['name'] not in assigned_champs]
-                            for champ in lang_speakers[:min(req_count, len(lang_speakers))]:
+                            # Use integer indexing
+                            num_to_assign = min(int(req_count), len(lang_speakers))
+                            for champ in lang_speakers[:num_to_assign]:
                                 # Assign shift that covers this hour
                                 shift_pattern = self.get_appropriate_shift(champ, hour)
                                 roster_data.append({
@@ -641,6 +645,8 @@ class CallCenterRosterOptimizer:
             
         except Exception as e:
             st.error(f"Language optimization error: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
             return self.optimize_roster_for_call_flow(analysis_data, available_champions)
 
     def get_appropriate_shift(self, champ, target_hour):
@@ -653,15 +659,25 @@ class CallCenterRosterOptimizer:
                 if s['times'][-1] <= 19 and self.is_hour_in_shift(target_hour, s)
             ]
             if appropriate_shifts:
-                return random.choice(appropriate_shifts)
+                # Use deterministic selection based on champ name
+                shift_idx = hash(champ['name']) % len(appropriate_shifts)
+                return appropriate_shifts[shift_idx]
         
         # For other cases, use normal logic
-        if champ['can_split'] and random.random() < 0.3:
-            split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-            return random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
-        else:
-            straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-            return random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+        if champ['can_split']:
+            name_hash = hash(champ['name'])
+            if name_hash % 10 < 3:  # 30% chance based on name hash
+                split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                if split_shifts:
+                    shift_idx = name_hash % len(split_shifts)
+                    return split_shifts[shift_idx]
+        
+        straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+        if straight_shifts:
+            shift_idx = hash(champ['name']) % len(straight_shifts)
+            return straight_shifts[shift_idx]
+        
+        return self.shift_patterns[0]
 
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
@@ -671,33 +687,55 @@ class CallCenterRosterOptimizer:
             for hour, calls in hourly_volume.items():
                 required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
         
-            # Simple heuristic approach instead of PuLP
+            # Deterministic approach instead of random
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             roster_data = []
             
-            # Sort champions by capacity (highest first)
-            sorted_champs = sorted(available_champions, key=lambda x: x['calls_per_hour'], reverse=True)
+            # Sort champions consistently (by name for deterministic results)
+            sorted_champs = sorted(available_champions, key=lambda x: x['name'])
             
-            # Calculate peak requirements
-            peak_hours = analysis_data.get('peak_hours', [11, 12, 13, 14])
-            peak_requirements = max([required_agents_per_hour.get(hour, 0) for hour in peak_hours])
+            # Ensure at least 3 champions start at 7 AM each day
+            early_shifts = [s for s in self.shift_patterns if s['times'][0] == 7]
             
-            # Assign consistent shifts for each champion throughout the week
+            # Assign early shifts first to ensure morning coverage
+            early_champs_needed = 3 * 7  # 3 per day for 7 days
+            early_champs_assigned = 0
+            
             for champ in sorted_champs:
                 # Choose appropriate shift pattern considering gender constraints
                 if champ['gender'] == 'F' and not champ['can_split']:
                     # Female champions who cannot split - only assign shifts ending by 7 PM
                     appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
-                    shift_pattern = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
-                elif champ['can_split'] and random.random() < 0.3:
-                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                    shift_pattern = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                    # Use deterministic selection based on champ name hash
+                    shift_idx = hash(champ['name']) % len(appropriate_shifts) if appropriate_shifts else 0
+                    shift_pattern = appropriate_shifts[shift_idx] if appropriate_shifts else self.shift_patterns[0]
                 else:
-                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                    shift_pattern = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                    # Prioritize early shifts for morning coverage
+                    if early_champs_assigned < early_champs_needed and early_shifts:
+                        shift_pattern = early_shifts[hash(champ['name']) % len(early_shifts)]
+                        early_champs_assigned += 5  # Each champ works 5 days
+                    elif champ['can_split']:
+                        name_hash = hash(champ['name'])
+                        if name_hash % 10 < 3:  # 30% chance based on name hash
+                            split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                            shift_idx = name_hash % len(split_shifts) if split_shifts else 0
+                            shift_pattern = split_shifts[shift_idx] if split_shifts else self.shift_patterns[0]
+                        else:
+                            straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                            shift_idx = name_hash % len(straight_shifts) if straight_shifts else 0
+                            shift_pattern = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
+                    else:
+                        straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                        shift_idx = hash(champ['name']) % len(straight_shifts) if straight_shifts else 0
+                        shift_pattern = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
                 
-                # Assign this shift pattern for 5 days
-                work_days = random.sample(days, 5)
+                # Assign this shift pattern for 5 days (deterministic selection)
+                all_days = list(days)
+                name_hash = hash(champ['name'])
+                # Shuffle days deterministically based on name hash
+                random.seed(name_hash)
+                random.shuffle(all_days)
+                work_days = all_days[:5]
                 
                 for day in work_days:
                     roster_data.append({
@@ -729,15 +767,29 @@ class CallCenterRosterOptimizer:
             # Choose consistent shift pattern for the week considering gender constraints
             if champ['gender'] == 'F' and not champ['can_split']:
                 appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
-                shift = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
-            elif champ['can_split'] and random.random() < 0.3:
-                split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                shift = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                shift_idx = hash(champ['name']) % len(appropriate_shifts) if appropriate_shifts else 0
+                shift = appropriate_shifts[shift_idx] if appropriate_shifts else self.shift_patterns[0]
+            elif champ['can_split']:
+                name_hash = hash(champ['name'])
+                if name_hash % 10 < 3:  # 30% chance based on name hash
+                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                    shift_idx = name_hash % len(split_shifts) if split_shifts else 0
+                    shift = split_shifts[shift_idx] if split_shifts else self.shift_patterns[0]
+                else:
+                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                    shift_idx = name_hash % len(straight_shifts) if straight_shifts else 0
+                    shift = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
             else:
                 straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                shift = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                shift_idx = hash(champ['name']) % len(straight_shifts) if straight_shifts else 0
+                shift = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
             
-            work_days = random.sample(days, 5)  # Each champ works 5 days
+            # Deterministic day selection
+            all_days = list(days)
+            name_hash = hash(champ['name'])
+            random.seed(name_hash)
+            random.shuffle(all_days)
+            work_days = all_days[:5]  # Each champ works 5 days
             
             for day in work_days:
                 roster_data.append({
@@ -833,13 +885,22 @@ class CallCenterRosterOptimizer:
                     # Assign appropriate shift considering gender constraints
                     if champ['gender'] == 'F' and not champ['can_split']:
                         appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 19]
-                        shift = random.choice(appropriate_shifts) if appropriate_shifts else self.shift_patterns[0]
-                    elif champ['can_split'] and random.random() < 0.3:
-                        split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                        shift = random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                        shift_idx = hash(champ['name']) % len(appropriate_shifts) if appropriate_shifts else 0
+                        shift = appropriate_shifts[shift_idx] if appropriate_shifts else self.shift_patterns[0]
+                    elif champ['can_split']:
+                        name_hash = hash(champ['name'])
+                        if name_hash % 10 < 3:
+                            split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                            shift_idx = name_hash % len(split_shifts) if split_shifts else 0
+                            shift = split_shifts[shift_idx] if split_shifts else self.shift_patterns[0]
+                        else:
+                            straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                            shift_idx = name_hash % len(straight_shifts) if straight_shifts else 0
+                            shift = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
                     else:
                         straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                        shift = random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                        shift_idx = hash(champ['name']) % len(straight_shifts) if straight_shifts else 0
+                        shift = straight_shifts[shift_idx] if straight_shifts else self.shift_patterns[0]
                     
                     new_roster_data.append({
                         'Day': day,
@@ -1393,6 +1454,26 @@ class CallCenterRosterOptimizer:
         
         return validation_results
 
+    def validate_morning_coverage(self, roster_df):
+        """Validate that at least 3 champions are available at 7 AM each day"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        validation_results = {}
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            morning_champs = 0
+            
+            for _, row in day_roster.iterrows():
+                if self.is_agent_working_at_hour(row, 7):  # 7 AM
+                    morning_champs += 1
+            
+            validation_results[day] = {
+                'morning_champs': morning_champs,
+                'status': '✅ Sufficient' if morning_champs >= 3 else '❌ Insufficient'
+            }
+        
+        return validation_results
+
     def show_leave_management(self, leave_data):
         """Show leave management interface with close button"""
         st.markdown('<div class="editor-section">', unsafe_allow_html=True)
@@ -1459,7 +1540,8 @@ class CallCenterRosterOptimizer:
         
         for i, day in enumerate(week_days):
             date_str = week_dates[i]
-            column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
+            column_config[f"{day} ({date
+                        column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
                 f"{day}",
                 options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
                 help=f"Leave for {date_str}"
@@ -2052,21 +2134,37 @@ def main():
         
         # Roster validation
         st.subheader("✅ Roster Validation")
-        
+
+        # ADD MORNING COVERAGE VALIDATION HERE
+        st.subheader("🌅 Morning Coverage Validation (7 AM)")
+        morning_validation = optimizer.validate_morning_coverage(st.session_state.roster_df)
+        morning_col1, morning_col2 = st.columns(2)
+
+        with morning_col1:
+            for day in ["Monday", "Tuesday", "Wednesday", "Thursday"]:
+                result = morning_validation[day]
+                st.write(f"{day}: {result['morning_champs']} champions - {result['status']}")
+
+        with morning_col2:
+            for day in ["Friday", "Saturday", "Sunday"]:
+                result = morning_validation[day]
+                st.write(f"{day}: {result['morning_champs']} champions - {result['status']}")
+
+        # THEN CONTINUE WITH THE EXISTING COLUMNS
         col1, col2 = st.columns(2)
-        
+
         with col1:
             st.write("**Split Shift Coverage Validation**")
             split_validation = optimizer.validate_split_shift_coverage(st.session_state.roster_df)
             for day, result in split_validation.items():
                 st.write(f"{day}: {result['split_champs']} split champs - {result['status']}")
-        
+
         with col2:
             st.write("**Answer Level Target Validation**")
             al_validation = optimizer.validate_al_target(st.session_state.roster_df, st.session_state.analysis_data)
             for day, result in al_validation.items():
                 st.write(f"{day}: {result['expected_al']:.1f}% - {result['status']}")
-        
+
         # Female champion shift validation
         st.subheader("👩 Female Champion Shift Validation")
         female_validation = optimizer.validate_female_shifts(st.session_state.roster_df)
