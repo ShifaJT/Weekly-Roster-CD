@@ -137,6 +137,9 @@ class CallCenterRosterOptimizer:
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202
         self.available_languages = ['ka', 'hi', 'te', 'ta', 'en']  # Supported languages
+        
+        # Set seed for reproducibility
+        random.seed(42)
 
     def load_champions(self):
         return [
@@ -287,14 +290,20 @@ class CallCenterRosterOptimizer:
         return hourly_al_results
 
     def is_agent_working_at_hour(self, row, hour):
+        """Check if an agent is working at a specific hour - FIXED VERSION"""
         try:
-            if row['Shift Type'] == 'Straight':
-                times = row['Start Time'].split(' to ')
+            shift_time = row['Start Time']
+            
+            # Handle straight shifts
+            if '&' not in shift_time:
+                times = shift_time.split(' to ')
                 start_hour = int(times[0].split(':')[0])
                 end_hour = int(times[1].split(':')[0])
                 return start_hour <= hour < end_hour
+            
+            # Handle split shifts
             else:
-                shifts = row['Start Time'].split(' & ')
+                shifts = shift_time.split(' & ')
                 for shift in shifts:
                     times = shift.split(' to ')
                     start_hour = int(times[0].split(':')[0])
@@ -302,7 +311,7 @@ class CallCenterRosterOptimizer:
                     if start_hour <= hour < end_hour:
                         return True
                 return False
-        except:
+        except Exception as e:
             return False
 
     def get_al_status(self, al_value):
@@ -343,7 +352,7 @@ class CallCenterRosterOptimizer:
         # Add champion data sheet
         champion_data = pd.DataFrame({
             'Name': [champ['name'] for champ in self.champions],
-                        'Primary_Language': [champ['primary_lang'] for champ in self.champions],
+            'Primary_Language': [champ['primary_lang'] for champ in self.champions],
             'Secondary_Languages': [','.join(champ['secondary_langs']) for champ in self.champions],
             'Calls_Per_Hour': [champ['calls_per_hour'] for champ in self.champions],
             'Can_Split': [1 if champ['can_split'] else 0 for champ in self.champions],
@@ -570,7 +579,10 @@ class CallCenterRosterOptimizer:
         }
 
     def get_appropriate_shift(self, champ, target_hour=None):
-        """Get appropriate shift pattern considering gender constraints and time preferences"""
+        """Get appropriate shift pattern considering gender constraints and time preferences - DETERMINISTIC VERSION"""
+        
+        # Use a hash of the champion name for deterministic assignment
+        champ_hash = hash(champ['name'])
         
         # FEMALE CHAMPIONS WHO CANNOT SPLIT: Only assign shifts ending by 7 PM
         if champ['gender'] == 'F' and not champ['can_split']:
@@ -578,7 +590,7 @@ class CallCenterRosterOptimizer:
                                 if s['times'][-1] <= 19]  # Ends by 7 PM
             
             if appropriate_shifts:
-                shift_idx = hash(champ['name']) % len(appropriate_shifts)
+                shift_idx = champ_hash % len(appropriate_shifts)
                 return appropriate_shifts[shift_idx]
             else:
                 # Fallback: earliest available shift
@@ -592,25 +604,37 @@ class CallCenterRosterOptimizer:
                               if s['times'][-1] <= 20]  # Ends by 8 PM
             
             if preferred_shifts:
-                shift_idx = hash(champ['name']) % len(preferred_shifts)
+                shift_idx = champ_hash % len(preferred_shifts)
                 return preferred_shifts[shift_idx]
             else:
                 # If no preferred shifts, use normal logic
-                if random.random() < 0.3:  # 30% chance for split
+                if champ_hash % 10 < 3:  # 30% chance for split (deterministic)
                     split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                    return random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                    if split_shifts:
+                        return split_shifts[champ_hash % len(split_shifts)]
+                    else:
+                        return self.shift_patterns[0]
                 else:
                     straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                    return random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                    if straight_shifts:
+                        return straight_shifts[champ_hash % len(straight_shifts)]
+                    else:
+                        return self.shift_patterns[0]
         
         # MALE CHAMPIONS: Use normal logic
         else:
-            if champ['can_split'] and random.random() < 0.3:
+            if champ['can_split'] and champ_hash % 10 < 3:  # 30% chance for split (deterministic)
                 split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                return random.choice(split_shifts) if split_shifts else self.shift_patterns[0]
+                if split_shifts:
+                    return split_shifts[champ_hash % len(split_shifts)]
+                else:
+                    return self.shift_patterns[0]
             else:
                 straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                return random.choice(straight_shifts) if straight_shifts else self.shift_patterns[0]
+                if straight_shifts:
+                    return straight_shifts[champ_hash % len(straight_shifts)]
+                else:
+                    return self.shift_patterns[0]
 
     def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
         try:
@@ -635,10 +659,15 @@ class CallCenterRosterOptimizer:
             for champ in female_non_split:
                 shift_pattern = self.get_appropriate_shift(champ)
                 
-                # Assign 5 days
+                # Assign 5 days - deterministic assignment
                 all_days = list(days)
-                random.shuffle(all_days)
-                work_days = all_days[:5]
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
                 
                 for day in work_days:
                     roster_data.append({
@@ -661,8 +690,13 @@ class CallCenterRosterOptimizer:
                 shift_pattern = self.get_appropriate_shift(champ)
                 
                 all_days = list(days)
-                random.shuffle(all_days)
-                work_days = all_days[:5]
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
                 
                 for day in work_days:
                     roster_data.append({
@@ -685,8 +719,13 @@ class CallCenterRosterOptimizer:
                 shift_pattern = self.get_appropriate_shift(champ)
                 
                 all_days = list(days)
-                random.shuffle(all_days)
-                work_days = all_days[:5]
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
                 
                 for day in work_days:
                     roster_data.append({
@@ -704,11 +743,97 @@ class CallCenterRosterOptimizer:
                         'Status': champ['status']
                     })
             
-            return pd.DataFrame(roster_data)
+            roster_df = pd.DataFrame(roster_data)
+            
+            # Ensure 3-4 champions at 7 AM
+            roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=4)
+            
+            return roster_df
             
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
+
+    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=4):
+        """Ensure each day has between min_champs and max_champs working at 7 AM"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            morning_champs = 0
+            
+            # Count current morning champions
+            for _, row in day_roster.iterrows():
+                if self.is_agent_working_at_hour(row, 7):  # 7 AM
+                    morning_champs += 1
+            
+            # Adjust if needed
+            if morning_champs < min_champs:
+                # Need to add more morning champions
+                self.add_morning_champions(roster_df, day, min_champs - morning_champs)
+            elif morning_champs > max_champs:
+                # Need to reduce morning champions
+                self.reduce_morning_champions(roster_df, day, morning_champs - max_champs)
+        
+        return roster_df
+
+    def add_morning_champions(self, roster_df, day, count_needed):
+        """Add morning champions to a specific day"""
+        # Find champions not working at 7 AM on this day but available
+        day_champs = roster_df[roster_df['Day'] == day]['Champion'].unique()
+        
+        for champ_name in day_champs:
+            if count_needed <= 0:
+                break
+                
+            champ_row = roster_df[(roster_df['Champion'] == champ_name) & (roster_df['Day'] == day)]
+            if not champ_row.empty:
+                row_idx = champ_row.index[0]
+                current_shift = roster_df.at[row_idx, 'Start Time']
+                
+                # Check if this champion is not already working at 7 AM
+                if not self.is_agent_working_at_hour(roster_df.iloc[row_idx], 7):
+                    # Change to a morning shift
+                    champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
+                    if champ_data:
+                        morning_shifts = [s for s in self.shift_patterns 
+                                        if s['times'][0] <= 7 and s['times'][-1] <= (19 if champ_data['gender'] == 'F' and not champ_data['can_split'] else 21)]
+                        
+                        if morning_shifts:
+                            new_shift = morning_shifts[hash(champ_name) % len(morning_shifts)]
+                            roster_df.at[row_idx, 'Start Time'] = new_shift['display']
+                            roster_df.at[row_idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
+                            roster_df.at[row_idx, 'Duration'] = f'{new_shift["hours"]} hours'
+                            roster_df.at[row_idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
+                            count_needed -= 1
+
+    def reduce_morning_champions(self, roster_df, day, count_to_reduce):
+        """Reduce morning champions on a specific day"""
+        day_indices = roster_df[roster_df['Day'] == day].index
+        
+        for idx in day_indices:
+            if count_to_reduce <= 0:
+                break
+                
+            if self.is_agent_working_at_hour(roster_df.iloc[idx], 7):
+                champ_name = roster_df.at[idx, 'Champion']
+                champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
+                
+                if champ_data:
+                    # Change to a non-morning shift
+                    non_morning_shifts = [s for s in self.shift_patterns 
+                                         if s['times'][0] > 7 and 
+                                         s['times'][-1] <= (19 if champ_data['gender'] == 'F' and not champ_data['can_split'] else 21)]
+                    
+                    if non_morning_shifts:
+                        new_shift = non_morning_shifts[hash(champ_name) % len(non_morning_shifts)]
+                        roster_df.at[idx, 'Start Time'] = new_shift['display']
+                        roster_df.at[idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
+                        roster_df.at[idx, 'Duration'] = f'{new_shift["hours"]} hours'
+                        roster_df.at[idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
+                        count_to_reduce -= 1
 
     def optimize_roster_with_languages(self, analysis_data, available_champions):
         """
@@ -777,8 +902,13 @@ class CallCenterRosterOptimizer:
             shift_pattern = self.get_appropriate_shift(champ)
             
             all_days = list(days)
-            random.shuffle(all_days)
-            work_days = all_days[:5]
+            # Use hash for deterministic day assignment
+            champ_hash = hash(champ['name'])
+            # Shuffle days deterministically
+            random.seed(champ_hash)
+            all_days_sorted = sorted(all_days)
+            random.shuffle(all_days_sorted)
+            work_days = all_days_sorted[:5]
             
             for day in work_days:
                 roster_data.append({
@@ -796,7 +926,12 @@ class CallCenterRosterOptimizer:
                     'Status': champ['status']
                 })
         
-        return pd.DataFrame(roster_data)
+        roster_df = pd.DataFrame(roster_data)
+        
+        # Ensure 3-4 champions at 7 AM
+        roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=4)
+        
+        return roster_df
 
     def is_hour_in_shift(self, hour, shift):
         if shift['type'] == 'straight':
@@ -867,8 +1002,10 @@ class CallCenterRosterOptimizer:
             # If champion has less than 5 days, add missing days
             if len(work_days) < 5:
                 missing_days = [day for day in days if day not in work_days]
-                num_days_to_add = min(5 - len(work_days), len(missing_days))
-                days_to_add = random.sample(missing_days, num_days_to_add)
+                # Use deterministic selection of days to add
+                champ_hash = hash(champ_name)
+                random.seed(champ_hash)
+                days_to_add = random.sample(missing_days, min(5 - len(work_days), len(missing_days)))
                 
                 for day in days_to_add:
                     shift_pattern = self.get_appropriate_shift(champ)
