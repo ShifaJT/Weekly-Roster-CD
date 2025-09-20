@@ -1966,7 +1966,7 @@ def main():
         st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
         st.header("ℹ️ Champion Information")
         
-                st.subheader("Total Champions")
+        st.subheader("Total Champions")
         total_champs = len(optimizer.champions)
         active_champs = len([c for c in optimizer.champions if c['status'] == 'Active'])
         maternity_champs = len([c for c in optimizer.champions if c['status'] == 'Maternity'])
