@@ -1584,7 +1584,7 @@ class CallCenterRosterOptimizer:
             ws_roster.cell(row=row_idx, column=1, value=champ['name'])
             ws_roster.cell(row=row_idx, column=2, value=champ['status'])
             ws_roster.cell(row=row_idx, column=3, value=champ['primary_lang'].upper())
-                        ws_roster.cell(row=row_idx, column=4, value=', '.join([lang.upper() for lang in champ['secondary_langs']]))
+            ws_roster.cell(row=row_idx, column=4, value=', '.join([lang.upper() for lang in champ['secondary_langs']]))
             
             # Get shift information from roster
             champ_shifts = roster_df[roster_df['Champion'] == champ['name']]
