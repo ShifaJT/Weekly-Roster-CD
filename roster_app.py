@@ -710,6 +710,57 @@ class CallCenterRosterOptimizer:
             st.error(f"Optimization error: {str(e)}")
             return self.generate_fallback_roster(available_champions, days)
 
+    def optimize_roster_with_languages(self, analysis_data, available_champions):
+        """
+        Optimize roster considering language-specific call volumes
+        """
+        try:
+            # If we have language-specific data, use it for optimization
+            if 'language_volume' in analysis_data:
+                # Group champions by their language capabilities
+                language_groups = {}
+                for lang in self.available_languages:
+                    language_groups[lang] = []
+                
+                for champ in available_champions:
+                    # Add to primary language group
+                    if champ['primary_lang'] in language_groups:
+                        language_groups[champ['primary_lang']].append(champ)
+                    # Add to secondary language groups
+                    for lang in champ['secondary_langs']:
+                        if lang in language_groups:
+                            language_groups[lang].append(champ)
+                
+                # Calculate language-specific requirements
+                hourly_language_requirements = {}
+                for hour in self.operation_hours:
+                    if hour in analysis_data['hourly_volume']:
+                        hourly_language_requirements[hour] = {}
+                        for lang in self.available_languages:
+                            if lang in analysis_data['language_volume'] and hour in analysis_data['language_volume'][lang]:
+                                lang_calls = analysis_data['language_volume'][lang][hour]
+                                if lang_calls > 0:
+                                    agents_needed = self.agents_needed_for_target(
+                                        lang_calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS
+                                    )
+                                    hourly_language_requirements[hour][lang] = agents_needed
+                
+                # Use the regular optimization as base
+                roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions)
+                
+                # For now, return the base roster - you can enhance this with language-specific logic
+                return roster_df
+                
+            else:
+                # Fall back to regular optimization if no language data
+                return self.optimize_roster_for_call_flow(analysis_data, available_champions)
+                
+        except Exception as e:
+            st.error(f"Language-aware optimization error: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
+            return self.optimize_roster_for_call_flow(analysis_data, available_champions)
+
     def generate_fallback_roster(self, available_champions, days):
         roster_data = []
         
