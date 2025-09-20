@@ -1540,8 +1540,8 @@ class CallCenterRosterOptimizer:
         
         for i, day in enumerate(week_days):
             date_str = week_dates[i]
-            column_config[f"{day} ({date
-                        column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
+            # FIXED LINE: Remove the incomplete string concatenation
+            column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
                 f"{day}",
                 options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
                 help=f"Leave for {date_str}"
@@ -1581,7 +1581,7 @@ class CallCenterRosterOptimizer:
         
         st.markdown('</div>', unsafe_allow_html=True)
         return new_leave_data
-
+        
     def format_excel_for_download(self, roster_df, week_offs, leave_data, analysis_data):
         """Format the Excel file to match the desired image format"""
         # Create a new workbook
