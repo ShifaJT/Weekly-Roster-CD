@@ -2278,7 +2278,7 @@ def main():
         st.subheader("Download Data Template")
         st.write("Download this template, add your call volume data, and upload it back.")
 
-        template_data = optimizer.create_template_file()
+        template_data = optimizer.createtemplatefile()
 
         st.download_button(
             "📥 Download Data Template",
