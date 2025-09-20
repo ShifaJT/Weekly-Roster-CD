@@ -199,59 +199,74 @@ class CallCenterRosterOptimizer:
                 languages.add(lang)
         return sorted(list(languages))
         
-def is_morning_shift(self, shift_pattern):
-    """Check if a shift starts at 7 AM"""
-    return shift_pattern['times'][0] == 7
+    def is_morning_shift(self, shift_pattern):
+        """Check if a shift starts at 7 AM"""
+        return shift_pattern['times'][0] == 7
 
-def get_non_morning_shift(self, champ):
-    """Get a shift that doesn't start at 7 AM"""
-    non_morning_shifts = [s for s in self.shift_patterns if s['times'][0] != 7]
-    
-    if champ['gender'] == 'F' and not champ['can_split']:
-        # For female champions who cannot split, filter shifts ending by 7 PM
-        appropriate_shifts = [s for s in non_morning_shifts if s['times'][-1] <= 19]
-        if appropriate_shifts:
-            shift_idx = hash(champ['name']) % len(appropriate_shifts)
-            return appropriate_shifts[shift_idx]
-    
-    # For other champions, return any non-morning shift
-    if non_morning_shifts:
-        shift_idx = hash(champ['name']) % len(non_morning_shifts)
-        return non_morning_shifts[shift_idx]
-    
-    # Fallback
-    return self.shift_patterns[1]  # 8-5 shift
+    def get_non_morning_shift(self, champ):
+        """Get a shift that doesn't start at 7 AM"""
+        non_morning_shifts = [s for s in self.shift_patterns if s['times'][0] != 7]
+        
+        if champ['gender'] == 'F' and not champ['can_split']:
+            # For female champions who cannot split, filter shifts ending by 7 PM
+            appropriate_shifts = [s for s in non_morning_shifts if s['times'][-1] <= 19]
+            if appropriate_shifts:
+                shift_idx = hash(champ['name']) % len(appropriate_shifts)
+                return appropriate_shifts[shift_idx]
+        
+        # For other champions, return any non-morning shift
+        if non_morning_shifts:
+            shift_idx = hash(champ['name']) % len(non_morning_shifts)
+            return non_morning_shifts[shift_idx]
+        
+        # Fallback
+        return self.shift_patterns[1]  # 8-5 shift
 
-def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=4):
-    """Get appropriate shift pattern considering morning capacity"""
-    # Use a hash of the champion name for deterministic assignment
-    champ_hash = hash(champ['name'])
-    
-    # FEMALE CHAMPIONS WHO CANNOT SPLIT: Only assign shifts ending by 7 PM
-    if champ['gender'] == 'F' and not champ['can_split']:
-        appropriate_shifts = [s for s in self.shift_patterns 
-                            if s['times'][-1] <= 19]  # Ends by 7 PM
+    def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=4):
+        """Get appropriate shift pattern considering morning capacity"""
+        # Use a hash of the champion name for deterministic assignment
+        champ_hash = hash(champ['name'])
         
-        if appropriate_shifts:
-            shift_idx = champ_hash % len(appropriate_shifts)
-            return appropriate_shifts[shift_idx]
-        else:
-            # Fallback: earliest available shift
-            early_shifts = sorted(self.shift_patterns, key=lambda x: x['times'][-1])
-            return early_shifts[0] if early_shifts else self.shift_patterns[0]
-    
-    # FEMALE CHAMPIONS WHO CAN SPLIT: Prefer earlier shifts but allow flexibility
-    elif champ['gender'] == 'F' and champ['can_split']:
-        # Prefer shifts ending by 8 PM for female champions
-        preferred_shifts = [s for s in self.shift_patterns 
-                          if s['times'][-1] <= 20]  # Ends by 8 PM
+        # FEMALE CHAMPIONS WHO CANNOT SPLIT: Only assign shifts ending by 7 PM
+        if champ['gender'] == 'F' and not champ['can_split']:
+            appropriate_shifts = [s for s in self.shift_patterns 
+                                if s['times'][-1] <= 19]  # Ends by 7 PM
+            
+            if appropriate_shifts:
+                shift_idx = champ_hash % len(appropriate_shifts)
+                return appropriate_shifts[shift_idx]
+            else:
+                # Fallback: earliest available shift
+                early_shifts = sorted(self.shift_patterns, key=lambda x: x['times'][-1])
+                return early_shifts[0] if early_shifts else self.shift_patterns[0]
         
-        if preferred_shifts:
-            shift_idx = champ_hash % len(preferred_shifts)
-            return preferred_shifts[shift_idx]
+        # FEMALE CHAMPIONS WHO CAN SPLIT: Prefer earlier shifts but allow flexibility
+        elif champ['gender'] == 'F' and champ['can_split']:
+            # Prefer shifts ending by 8 PM for female champions
+            preferred_shifts = [s for s in self.shift_patterns 
+                              if s['times'][-1] <= 20]  # Ends by 8 PM
+            
+            if preferred_shifts:
+                shift_idx = champ_hash % len(preferred_shifts)
+                return preferred_shifts[shift_idx]
+            else:
+                # If no preferred shifts, use normal logic
+                if champ_hash % 10 < 3:  # 30% chance for split (deterministic)
+                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+                    if split_shifts:
+                        return split_shifts[champ_hash % len(split_shifts)]
+                    else:
+                        return self.shift_patterns[0]
+                else:
+                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
+                    if straight_shifts:
+                        return straight_shifts[champ_hash % len(straight_shifts)]
+                    else:
+                        return self.shift_patterns[0]
+        
+        # MALE CHAMPIONS: Use normal logic
         else:
-            # If no preferred shifts, use normal logic
-            if champ_hash % 10 < 3:  # 30% chance for split (deterministic)
+            if champ['can_split'] and champ_hash % 10 < 3:  # 30% chance for split (deterministic)
                 split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
                 if split_shifts:
                     return split_shifts[champ_hash % len(split_shifts)]
@@ -264,21 +279,6 @@ def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_
                 else:
                     return self.shift_patterns[0]
     
-    # MALE CHAMPIONS: Use normal logic
-    else:
-        if champ['can_split'] and champ_hash % 10 < 3:  # 30% chance for split (deterministic)
-            split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-            if split_shifts:
-                return split_shifts[champ_hash % len(split_shifts)]
-            else:
-                return self.shift_patterns[0]
-        else:
-            straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-            if straight_shifts:
-                return straight_shifts[champ_hash % len(straight_shifts)]
-            else:
-                return self.shift_patterns[0]
-
     def calculate_hourly_capacity(self, num_agents, aht_seconds):
         hourly_capacity = (num_agents * 3600) / aht_seconds
         return round(hourly_capacity)
