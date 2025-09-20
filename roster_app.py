@@ -895,7 +895,7 @@ class CallCenterRosterOptimizer:
 
         required_capacity = analysis_data['total_daily_calls'] * 7 * 1.1
 
-                utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
+        utilization_rate = min(100, (required_capacity / total_capacity) * 100) if total_capacity > 0 else 0
         expected_answer_rate = min(100, (total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100) if analysis_data['total_daily_calls'] > 0 else 0
 
         return {
