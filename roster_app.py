@@ -223,7 +223,8 @@ class CallCenterRosterOptimizer:
         return self.shift_patterns[1]  # 8-5 shift
 
     def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=4):
-        """Get appropriate shift pattern considering morning capacity"""
+        """Get appropriate shift pattern considering gender constraints and time preferences - DETERMINISTIC VERSION"""
+        
         # Use a hash of the champion name for deterministic assignment
         champ_hash = hash(champ['name'])
         
@@ -278,7 +279,7 @@ class CallCenterRosterOptimizer:
                     return straight_shifts[champ_hash % len(straight_shifts)]
                 else:
                     return self.shift_patterns[0]
-    
+
     def calculate_hourly_capacity(self, num_agents, aht_seconds):
         hourly_capacity = (num_agents * 3600) / aht_seconds
         return round(hourly_capacity)
@@ -369,37 +370,37 @@ class CallCenterRosterOptimizer:
 
         return hourly_al_results
 
-def is_agent_working_at_hour(self, row, hour):
-    """Check if an agent is working at a specific hour - IMPROVED VERSION"""
-    try:
-        if pd.isna(row['Start Time']):
-            return False
+    def is_agent_working_at_hour(self, row, hour):
+        """Check if an agent is working at a specific hour - IMPROVED VERSION"""
+        try:
+            if pd.isna(row['Start Time']):
+                return False
+                
+            shift_time = row['Start Time']
             
-        shift_time = row['Start Time']
-        
-        # Handle straight shifts
-        if '&' not in shift_time:
-            times = shift_time.split(' to ')
-            if len(times) >= 2:
-                start_hour = int(times[0].split(':')[0])
-                end_hour = int(times[1].split(':')[0])
-                # Check if hour is within shift (inclusive start, exclusive end)
-                return start_hour <= hour < end_hour
-        
-        # Handle split shifts
-        else:
-            shifts = shift_time.split(' & ')
-            for shift in shifts:
-                times = shift.split(' to ')
+            # Handle straight shifts
+            if '&' not in shift_time:
+                times = shift_time.split(' to ')
                 if len(times) >= 2:
                     start_hour = int(times[0].split(':')[0])
                     end_hour = int(times[1].split(':')[0])
-                    if start_hour <= hour < end_hour:
-                        return True
-        return False
-        
-    except Exception as e:
-        return False
+                    # Check if hour is within shift (inclusive start, exclusive end)
+                    return start_hour <= hour < end_hour
+            
+            # Handle split shifts
+            else:
+                shifts = shift_time.split(' & ')
+                for shift in shifts:
+                    times = shift.split(' to ')
+                    if len(times) >= 2:
+                        start_hour = int(times[0].split(':')[0])
+                        end_hour = int(times[1].split(':')[0])
+                        if start_hour <= hour < end_hour:
+                            return True
+            return False
+            
+        except Exception as e:
+            return False
 
     def get_al_status(self, al_value):
         if al_value >= self.TARGET_AL:
@@ -665,349 +666,295 @@ def is_agent_working_at_hour(self, row, hour):
             'total_daily_calls': 3130
         }
 
-    def get_appropriate_shift(self, champ, target_hour=None):
-        """Get appropriate shift pattern considering gender constraints and time preferences - DETERMINISTIC VERSION"""
+    def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
+        try:
+            hourly_volume = analysis_data['hourly_volume']
         
-        # Use a hash of the champion name for deterministic assignment
-        champ_hash = hash(champ['name'])
+            required_agents_per_hour = {}
+            for hour, calls in hourly_volume.items():
+                required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
         
-        # FEMALE CHAMPIONS WHO CANNOT SPLIT: Only assign shifts ending by 7 PM
-        if champ['gender'] == 'F' and not champ['can_split']:
-            appropriate_shifts = [s for s in self.shift_patterns 
-                                if s['times'][-1] <= 19]  # Ends by 7 PM
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            roster_data = []
             
-            if appropriate_shifts:
-                shift_idx = champ_hash % len(appropriate_shifts)
-                return appropriate_shifts[shift_idx]
-            else:
-                # Fallback: earliest available shift
-                early_shifts = sorted(self.shift_patterns, key=lambda x: x['times'][-1])
-                return early_shifts[0] if early_shifts else self.shift_patterns[0]
-        
-        # FEMALE CHAMPIONS WHO CAN SPLIT: Prefer earlier shifts but allow flexibility
-        elif champ['gender'] == 'F' and champ['can_split']:
-            # Prefer shifts ending by 8 PM for female champions
-            preferred_shifts = [s for s in self.shift_patterns 
-                              if s['times'][-1] <= 20]  # Ends by 8 PM
+            # Track morning shifts to prevent overstaffing
+            morning_shifts_per_day = {day: 0 for day in days}
+            max_morning_shifts = 4  # Maximum 4 champions at 7 AM
             
-            if preferred_shifts:
-                shift_idx = champ_hash % len(preferred_shifts)
-                return preferred_shifts[shift_idx]
-            else:
-                # If no preferred shifts, use normal logic
-                if champ_hash % 10 < 3:  # 30% chance for split (deterministic)
-                    split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                    if split_shifts:
-                        return split_shifts[champ_hash % len(split_shifts)]
-                    else:
-                        return self.shift_patterns[0]
-                else:
-                    straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                    if straight_shifts:
-                        return straight_shifts[champ_hash % len(straight_shifts)]
-                    else:
-                        return self.shift_patterns[0]
-        
-        # MALE CHAMPIONS: Use normal logic
-        else:
-            if champ['can_split'] and champ_hash % 10 < 3:  # 30% chance for split (deterministic)
-                split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
-                if split_shifts:
-                    return split_shifts[champ_hash % len(split_shifts)]
-                else:
-                    return self.shift_patterns[0]
-            else:
-                straight_shifts = [s for s in self.shift_patterns if s['type'] == 'straight']
-                if straight_shifts:
-                    return straight_shifts[champ_hash % len(straight_shifts)]
-                else:
-                    return self.shift_patterns[0]
+            # Separate champions by gender and split capability
+            female_non_split = [champ for champ in available_champions 
+                              if champ['gender'] == 'F' and not champ['can_split']]
+            female_can_split = [champ for champ in available_champions 
+                              if champ['gender'] == 'F' and champ['can_split']]
+            male_champions = [champ for champ in available_champions 
+                            if champ['gender'] == 'M']
+            
+            # Process female champions who cannot split first (most restrictive)
+            for champ in female_non_split:
+                # Get appropriate shift that doesn't cause morning overstaffing
+                shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
+                
+                # Assign 5 days
+                all_days = list(days)
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
+                
+                for day in work_days:
+                    # Check if adding this shift would exceed morning capacity
+                    if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
+                        # Get a non-morning shift instead
+                        shift_pattern = self.get_non_morning_shift(champ)
+                    
+                    if self.is_morning_shift(shift_pattern):
+                        morning_shifts_per_day[day] += 1
+                    
+                    roster_data.append({
+                        'Day': day,
+                        'Champion': champ['name'],
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                        'Start Time': shift_pattern['display'],
+                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                        'Duration': f'{shift_pattern["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+            
+            # Process female champions who can split
+            for champ in female_can_split:
+                shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
+                
+                all_days = list(days)
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
+                
+                for day in work_days:
+                    # Check if adding this shift would exceed morning capacity
+                    if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
+                        # Get a non-morning shift instead
+                        shift_pattern = self.get_non_morning_shift(champ)
+                    
+                    if self.is_morning_shift(shift_pattern):
+                        morning_shifts_per_day[day] += 1
+                    
+                    roster_data.append({
+                        'Day': day,
+                        'Champion': champ['name'],
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                        'Start Time': shift_pattern['display'],
+                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                        'Duration': f'{shift_pattern["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+            
+            # Process male champions last (most flexible)
+            for champ in male_champions:
+                shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
+                
+                all_days = list(days)
+                # Use hash for deterministic day assignment
+                champ_hash = hash(champ['name'])
+                # Shuffle days deterministically
+                random.seed(champ_hash)
+                all_days_sorted = sorted(all_days)
+                random.shuffle(all_days_sorted)
+                work_days = all_days_sorted[:5]
+                
+                for day in work_days:
+                    # Check if adding this shift would exceed morning capacity
+                    if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
+                        # Get a non-morning shift instead
+                        shift_pattern = self.get_non_morning_shift(champ)
+                    
+                    if self.is_morning_shift(shift_pattern):
+                        morning_shifts_per_day[day] += 1
+                    
+                    roster_data.append({
+                        'Day': day,
+                        'Champion': champ['name'],
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                        'Start Time': shift_pattern['display'],
+                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                        'Duration': f'{shift_pattern["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+            
+            return pd.DataFrame(roster_data)
+            
+        except Exception as e:
+            st.error(f"Optimization error: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
+            return self.generate_fallback_roster(available_champions, days)
 
-def optimize_roster_for_call_flow(self, analysis_data, available_champions, selected_languages=None):
-    try:
-        hourly_volume = analysis_data['hourly_volume']
-    
-        required_agents_per_hour = {}
-        for hour, calls in hourly_volume.items():
-            required_agents_per_hour[hour] = self.agents_needed_for_target(calls, self.TARGET_AL, self.AVERAGE_HANDLING_TIME_SECONDS)
-    
+    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=4):
+        """Ensure each day has between min_champs and max_champs working at 7 AM"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        roster_data = []
         
-        # Track morning shifts to prevent overstaffing
-        morning_shifts_per_day = {day: 0 for day in days}
-        max_morning_shifts = 4  # Maximum 4 champions at 7 AM
+        # First validate current coverage
+        coverage = self.validate_morning_coverage(roster_df)
         
-        # Separate champions by gender and split capability
-        female_non_split = [champ for champ in available_champions 
-                          if champ['gender'] == 'F' and not champ['can_split']]
-        female_can_split = [champ for champ in available_champions 
-                          if champ['gender'] == 'F' and champ['can_split']]
-        male_champions = [champ for champ in available_champions 
-                        if champ['gender'] == 'M']
-        
-        # Process female champions who cannot split first (most restrictive)
-        for champ in female_non_split:
-            # Get appropriate shift that doesn't cause morning overstaffing
-            shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
+        for day in days:
+            day_result = coverage[day]
+            morning_champs = day_result['morning_champs']
             
-            # Assign 5 days
-            all_days = list(days)
-            # Use hash for deterministic day assignment
-            champ_hash = hash(champ['name'])
-            # Shuffle days deterministically
-            random.seed(champ_hash)
-            all_days_sorted = sorted(all_days)
-            random.shuffle(all_days_sorted)
-            work_days = all_days_sorted[:5]
+            # Get list of morning workers for this day
+            day_roster = roster_df[roster_df['Day'] == day]
+            morning_workers = []
+            for idx, row in day_roster.iterrows():
+                if self.is_agent_working_at_hour(row, 7):
+                    morning_workers.append((idx, row['Champion']))
             
-            for day in work_days:
-                # Check if adding this shift would exceed morning capacity
-                if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
-                    # Get a non-morning shift instead
-                    shift_pattern = self.get_non_morning_shift(champ)
+            # Adjust if needed
+            if morning_champs < min_champs:
+                # Need to add more morning champions
+                needed = min_champs - morning_champs
+                self.add_morning_champions(roster_df, day, needed, morning_workers)
+            elif morning_champs > max_champs:
+                # Need to reduce morning champions
+                excess = morning_champs - max_champs
+                self.reduce_morning_champions(roster_df, day, excess, morning_workers)
+        
+        return roster_df
+
+    def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
+        """Add morning champions to a specific day"""
+        # Get champions already working this day
+        day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
+        existing_morning_names = [name for _, name in existing_morning_workers]
+        
+        # Find available champions who can work mornings
+        available_champs = []
+        for champ in self.champions:
+            if (champ['name'] not in day_workers and  # Not already working this day
+                champ['status'] == 'Active' and  # Only active champions
+                champ['name'] not in existing_morning_names):  # Not already a morning worker
                 
-                if self.is_morning_shift(shift_pattern):
-                    morning_shifts_per_day[day] += 1
-                
-                roster_data.append({
+                # Check if champion can work morning shifts based on gender constraints
+                if self.can_work_morning_shift(champ):
+                    available_champs.append(champ)
+        
+        # Add morning workers
+        for i in range(min(count_needed, len(available_champs))):
+            champ = available_champs[i]
+            morning_shift = self.get_morning_shift_for_champ(champ)
+            
+            if morning_shift:
+                new_row = {
                     'Day': day,
                     'Champion': champ['name'],
                     'Primary Language': champ['primary_lang'].upper(),
                     'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                    'Start Time': shift_pattern['display'],
-                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                    'Duration': f'{shift_pattern["hours"]} hours',
+                    'Shift Type': 'Split' if morning_shift['type'] == 'split' else 'Straight',
+                    'Start Time': morning_shift['display'],
+                    'End Time': f"{morning_shift['times'][-1]:02d}:00",
+                    'Duration': f'{morning_shift["hours"]} hours',
                     'Calls/Hour Capacity': champ['calls_per_hour'],
                     'Can Split': 'Yes' if champ['can_split'] else 'No',
                     'Gender': champ['gender'],
                     'Status': champ['status']
-                })
-        
-        # Process female champions who can split
-        for champ in female_can_split:
-            shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
-            
-            all_days = list(days)
-            # Use hash for deterministic day assignment
-            champ_hash = hash(champ['name'])
-            # Shuffle days deterministically
-            random.seed(champ_hash)
-            all_days_sorted = sorted(all_days)
-            random.shuffle(all_days_sorted)
-            work_days = all_days_sorted[:5]
-            
-            for day in work_days:
-                # Check if adding this shift would exceed morning capacity
-                if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
-                    # Get a non-morning shift instead
-                    shift_pattern = self.get_non_morning_shift(champ)
+                }
                 
-                if self.is_morning_shift(shift_pattern):
-                    morning_shifts_per_day[day] += 1
-                
-                roster_data.append({
-                    'Day': day,
-                    'Champion': champ['name'],
-                    'Primary Language': champ['primary_lang'].upper(),
-                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                    'Start Time': shift_pattern['display'],
-                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                    'Duration': f'{shift_pattern["hours"]} hours',
-                    'Calls/Hour Capacity': champ['calls_per_hour'],
-                    'Can Split': 'Yes' if champ['can_split'] else 'No',
-                    'Gender': champ['gender'],
-                    'Status': champ['status']
-                })
+                # Add to roster
+                roster_df = pd.concat([roster_df, pd.DataFrame([new_row])], ignore_index=True)
         
-        # Process male champions last (most flexible)
-        for champ in male_champions:
-            shift_pattern = self.get_appropriate_shift(champ, morning_shifts_per_day, max_morning_shifts)
-            
-            all_days = list(days)
-            # Use hash for deterministic day assignment
-            champ_hash = hash(champ['name'])
-            # Shuffle days deterministically
-            random.seed(champ_hash)
-            all_days_sorted = sorted(all_days)
-            random.shuffle(all_days_sorted)
-            work_days = all_days_sorted[:5]
-            
-            for day in work_days:
-                # Check if adding this shift would exceed morning capacity
-                if self.is_morning_shift(shift_pattern) and morning_shifts_per_day[day] >= max_morning_shifts:
-                    # Get a non-morning shift instead
-                    shift_pattern = self.get_non_morning_shift(champ)
-                
-                if self.is_morning_shift(shift_pattern):
-                    morning_shifts_per_day[day] += 1
-                
-                roster_data.append({
-                    'Day': day,
-                    'Champion': champ['name'],
-                    'Primary Language': champ['primary_lang'].upper(),
-                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                    'Start Time': shift_pattern['display'],
-                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                    'Duration': f'{shift_pattern["hours"]} hours',
-                    'Calls/Hour Capacity': champ['calls_per_hour'],
-                    'Can Split': 'Yes' if champ['can_split'] else 'No',
-                    'Gender': champ['gender'],
-                    'Status': champ['status']
-                })
-        
-        return pd.DataFrame(roster_data)
-        
-    except Exception as e:
-        st.error(f"Optimization error: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
-        return self.generate_fallback_roster(available_champions, days)
+        return roster_df
 
-def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=4):
-    """Ensure each day has between min_champs and max_champs working at 7 AM"""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    # First validate current coverage
-    coverage = self.validate_morning_coverage(roster_df)
-    
-    for day in days:
-        day_result = coverage[day]
-        morning_champs = day_result['morning_champs']
+    def reduce_morning_champions(self, roster_df, day, count_to_reduce, morning_workers):
+        """Reduce morning champions on a specific day"""
+        # Sort by shift type: split shift workers first (keep them), straight shifts second
+        split_workers = []
+        straight_workers = []
         
-        # Get list of morning workers for this day
-        day_roster = roster_df[roster_df['Day'] == day]
-        morning_workers = []
-        for idx, row in day_roster.iterrows():
-            if self.is_agent_working_at_hour(row, 7):
-                morning_workers.append((idx, row['Champion']))
+        for idx, champ_name in morning_workers:
+            row = roster_df.loc[idx]
+            if row['Shift Type'] == 'Split':
+                split_workers.append((idx, champ_name))
+            else:
+                straight_workers.append((idx, champ_name))
         
-        # Adjust if needed
-        if morning_champs < min_champs:
-            # Need to add more morning champions
-            needed = min_champs - morning_champs
-            self.add_morning_champions(roster_df, day, needed, morning_workers)
-        elif morning_champs > max_champs:
-            # Need to reduce morning champions
-            excess = morning_champs - max_champs
-            self.reduce_morning_champions(roster_df, day, excess, morning_workers)
-    
-    return roster_df
+        # First remove straight shift workers, then split if needed
+        workers_to_adjust = straight_workers[:count_to_reduce]
+        remaining = count_to_reduce - len(workers_to_adjust)
+        
+        if remaining > 0:
+            workers_to_adjust.extend(split_workers[:remaining])
+        
+        # Change these workers to non-morning shifts
+        for idx, champ_name in workers_to_adjust:
+            champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
+            if champ_data:
+                non_morning_shift = self.get_non_morning_shift_for_champ(champ_data)
+                if non_morning_shift:
+                    roster_df.at[idx, 'Start Time'] = non_morning_shift['display']
+                    roster_df.at[idx, 'End Time'] = f"{non_morning_shift['times'][-1]:02d}:00"
+                    roster_df.at[idx, 'Duration'] = f'{non_morning_shift["hours"]} hours'
+                    roster_df.at[idx, 'Shift Type'] = 'Split' if non_morning_shift['type'] == 'split' else 'Straight'
+        
+        return roster_df
 
-def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
-    """Add morning champions to a specific day"""
-    # Get champions already working this day
-    day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
-    existing_morning_names = [name for _, name in existing_morning_workers]
-    
-    # Find available champions who can work mornings
-    available_champs = []
-    for champ in self.champions:
-        if (champ['name'] not in day_workers and  # Not already working this day
-            champ['status'] == 'Active' and  # Only active champions
-            champ['name'] not in existing_morning_names):  # Not already a morning worker
-            
-            # Check if champion can work morning shifts based on gender constraints
-            if self.can_work_morning_shift(champ):
-                available_champs.append(champ)
-    
-    # Add morning workers
-    for i in range(min(count_needed, len(available_champs))):
-        champ = available_champs[i]
-        morning_shift = self.get_morning_shift_for_champ(champ)
-        
-        if morning_shift:
-            new_row = {
-                'Day': day,
-                'Champion': champ['name'],
-                'Primary Language': champ['primary_lang'].upper(),
-                'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                'Shift Type': 'Split' if morning_shift['type'] == 'split' else 'Straight',
-                'Start Time': morning_shift['display'],
-                'End Time': f"{morning_shift['times'][-1]:02d}:00",
-                'Duration': f'{morning_shift["hours"]} hours',
-                'Calls/Hour Capacity': champ['calls_per_hour'],
-                'Can Split': 'Yes' if champ['can_split'] else 'No',
-                'Gender': champ['gender'],
-                'Status': champ['status']
-            }
-            
-            # Add to roster
-            roster_df = pd.concat([roster_df, pd.DataFrame([new_row])], ignore_index=True)
-
-def reduce_morning_champions(self, roster_df, day, count_to_reduce, morning_workers):
-    """Reduce morning champions on a specific day"""
-    # Sort by shift type: split shift workers first (keep them), straight shifts second
-    split_workers = []
-    straight_workers = []
-    
-    for idx, champ_name in morning_workers:
-        row = roster_df.loc[idx]
-        if row['Shift Type'] == 'Split':
-            split_workers.append((idx, champ_name))
+    def can_work_morning_shift(self, champ):
+        """Check if champion can work a morning shift based on gender constraints"""
+        if champ['gender'] == 'F' and not champ['can_split']:
+            # Female who can't split - only early shifts ending by 7 PM
+            return any(s['times'][0] <= 8 and s['times'][-1] <= 19 for s in self.shift_patterns)
         else:
-            straight_workers.append((idx, champ_name))
-    
-    # First remove straight shift workers, then split if needed
-    workers_to_adjust = straight_workers[:count_to_reduce]
-    remaining = count_to_reduce - len(workers_to_adjust)
-    
-    if remaining > 0:
-        workers_to_adjust.extend(split_workers[:remaining])
-    
-    # Change these workers to non-morning shifts
-    for idx, champ_name in workers_to_adjust:
-        champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
-        if champ_data:
-            non_morning_shift = self.get_non_morning_shift_for_champ(champ_data)
-            if non_morning_shift:
-                roster_df.at[idx, 'Start Time'] = non_morning_shift['display']
-                roster_df.at[idx, 'End Time'] = f"{non_morning_shift['times'][-1]:02d}:00"
-                roster_df.at[idx, 'Duration'] = f'{non_morning_shift["hours"]} hours'
-                roster_df.at[idx, 'Shift Type'] = 'Split' if non_morning_shift['type'] == 'split' else 'Straight'
+            # Male or female who can split - more flexible
+            return any(s['times'][0] <= 8 for s in self.shift_patterns)
 
-def can_work_morning_shift(self, champ):
-    """Check if champion can work a morning shift based on gender constraints"""
-    if champ['gender'] == 'F' and not champ['can_split']:
-        # Female who can't split - only early shifts ending by 7 PM
-        return any(s['times'][0] <= 8 and s['times'][-1] <= 19 for s in self.shift_patterns)
-    else:
-        # Male or female who can split - more flexible
-        return any(s['times'][0] <= 8 for s in self.shift_patterns)
+    def get_morning_shift_for_champ(self, champ):
+        """Get appropriate morning shift for a champion"""
+        if champ['gender'] == 'F' and not champ['can_split']:
+            # Female who can't split - early shifts ending by 7 PM
+            morning_shifts = [s for s in self.shift_patterns 
+                             if s['times'][0] <= 8 and s['times'][-1] <= 19]
+        else:
+            # Male or female who can split
+            morning_shifts = [s for s in self.shift_patterns 
+                             if s['times'][0] <= 8]
+        
+        if morning_shifts:
+            return morning_shifts[hash(champ['name']) % len(morning_shifts)]
+        return None
 
-def get_morning_shift_for_champ(self, champ):
-    """Get appropriate morning shift for a champion"""
-    if champ['gender'] == 'F' and not champ['can_split']:
-        # Female who can't split - early shifts ending by 7 PM
-        morning_shifts = [s for s in self.shift_patterns 
-                         if s['times'][0] <= 8 and s['times'][-1] <= 19]
-    else:
-        # Male or female who can split
-        morning_shifts = [s for s in self.shift_patterns 
-                         if s['times'][0] <= 8]
-    
-    if morning_shifts:
-        return morning_shifts[hash(champ['name']) % len(morning_shifts)]
-    return None
-
-def get_non_morning_shift_for_champ(self, champ):
-    """Get appropriate non-morning shift for a champion"""
-    if champ['gender'] == 'F' and not champ['can_split']:
-        # Female who can't split - shifts starting after 9 AM but ending by 7 PM
-        non_morning_shifts = [s for s in self.shift_patterns 
-                             if s['times'][0] >= 9 and s['times'][-1] <= 19]
-    else:
-        # Male or female who can split
-        non_morning_shifts = [s for s in self.shift_patterns 
-                             if s['times'][0] >= 9]
-    
-    if non_morning_shifts:
-        return non_morning_shifts[hash(champ['name']) % len(non_morning_shifts)]
-    return None
-    
+    def get_non_morning_shift_for_champ(self, champ):
+        """Get appropriate non-morning shift for a champion"""
+        if champ['gender'] == 'F' and not champ['can_split']:
+            # Female who can't split - shifts starting after 9 AM but ending by 7 PM
+            non_morning_shifts = [s for s in self.shift_patterns 
+                                 if s['times'][0] >= 9 and s['times'][-1] <= 19]
+        else:
+            # Male or female who can split
+            non_morning_shifts = [s for s in self.shift_patterns 
+                                 if s['times'][0] >= 9]
+        
+        if non_morning_shifts:
+            return non_morning_shifts[hash(champ['name']) % len(non_morning_shifts)]
+        return None
+        
     def optimize_roster_with_languages(self, analysis_data, available_champions):
         """
         Optimize roster considering language-specific call volumes
@@ -1204,39 +1151,39 @@ def get_non_morning_shift_for_champ(self, champ):
         
         return pd.DataFrame(new_roster_data)
 
-def get_available_champions(self, leave_data, specific_date=None):
-    available_champs = []
-    
-    for champ in self.champions:
-        # Skip maternity leave champions
-        if champ['status'] == 'Maternity':
-            continue
+    def get_available_champions(self, leave_data, specific_date=None):
+        available_champs = []
+        
+        for champ in self.champions:
+            # Skip maternity leave champions
+            if champ['status'] == 'Maternity':
+                continue
+                
+            champ_name = champ['name']
+            champ_leave = leave_data.get(champ_name, {})
+            on_leave = False
             
-        champ_name = champ['name']
-        champ_leave = leave_data.get(champ_name, {})
-        on_leave = False
+            # Check date-specific leaves first (these take precedence)
+            if specific_date:
+                date_leave = champ_leave.get('date_specific', {}).get(specific_date, "")
+                if date_leave and date_leave != "Second Half":
+                    on_leave = True
+            
+            # If not on date-specific leave, check leave types
+            if not on_leave:
+                on_leave = any([
+                    champ_leave.get('sick_leave', 0) == 1,
+                    champ_leave.get('casual_leave', 0) == 1,
+                    champ_leave.get('period_leave', 0) == 1,
+                    champ_leave.get('annual_leave', 0) == 1,
+                    champ_leave.get('comp_off', 0) == 1,
+                    champ_leave.get('maternity_leave', 0) == 1
+                ])
+            
+            if not on_leave:
+                available_champs.append(champ)
         
-        # Check date-specific leaves first (these take precedence)
-        if specific_date:
-            date_leave = champ_leave.get('date_specific', {}).get(specific_date, "")
-            if date_leave and date_leave != "Second Half":
-                on_leave = True
-        
-        # If not on date-specific leave, check leave types
-        if not on_leave:
-            on_leave = any([
-                champ_leave.get('sick_leave', 0) == 1,
-                champ_leave.get('casual_leave', 0) == 1,
-                champ_leave.get('period_leave', 0) == 1,
-                champ_leave.get('annual_leave', 0) == 1,
-                champ_leave.get('comp_off', 0) == 1,
-                champ_leave.get('maternity_leave', 0) == 1
-            ])
-        
-        if not on_leave:
-            available_champs.append(champ)
-    
-    return available_champs
+        return available_champs
 
     def calculate_coverage(self, roster_df, analysis_data):
         if roster_df is None or analysis_data is None:
@@ -1548,85 +1495,85 @@ def get_available_champions(self, leave_data, specific_date=None):
         else:
             return roster_df
 
-def format_roster_for_display(self, roster_df, week_offs, leave_data):
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    today = datetime.now()
-    week_start = today - timedelta(days=today.weekday())
-    week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+    def format_roster_for_display(self, roster_df, week_offs, leave_data):
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday())
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
-    display_df = pd.DataFrame()
-    display_df['Name'] = [champ['name'] for champ in self.champions]
-    display_df['Status'] = [champ['status'] for champ in self.champions]
-    display_df['Primary Language'] = [champ['primary_lang'].upper() for champ in self.champions]
-    display_df['Secondary Languages'] = [', '.join([lang.upper() for lang in champ['secondary_langs']]) for champ in self.champions]
+        display_df = pd.DataFrame()
+        display_df['Name'] = [champ['name'] for champ in self.champions]
+        display_df['Status'] = [champ['status'] for champ in self.champions]
+        display_df['Primary Language'] = [champ['primary_lang'].upper() for champ in self.champions]
+        display_df['Secondary Languages'] = [', '.join([lang.upper() for lang in champ['secondary_langs']]) for champ in self.champions]
 
-    display_df['Shift'] = ""
+        display_df['Shift'] = ""
 
-    for day in days:
-        display_df[day] = ""
+        for day in days:
+            display_df[day] = ""
 
-    for _, row in roster_df.iterrows():
-        champ_name = row['Champion']
-        day = row['Day']
-        shift_time = row['Start Time']
+        for _, row in roster_df.iterrows():
+            champ_name = row['Champion']
+            day = row['Day']
+            shift_time = row['Start Time']
 
-        champ_idx = display_df[display_df['Name'] == champ_name].index
-        if len(champ_idx) > 0:
-            display_df.at[champ_idx[0], day] = shift_time
-            if display_df.at[champ_idx[0], 'Shift'] == "":
-                display_df.at[champ_idx[0], 'Shift'] = shift_time
-
-    for champ, off_day in week_offs.items():
-        if off_day in days:
-            champ_idx = display_df[display_df['Name'] == champ].index
+            champ_idx = display_df[display_df['Name'] == champ_name].index
             if len(champ_idx) > 0:
-                display_df.at[champ_idx[0], off_day] = "WO"
+                display_df.at[champ_idx[0], day] = shift_time
+                if display_df.at[champ_idx[0], 'Shift'] == "":
+                    display_df.at[champ_idx[0], 'Shift'] = shift_time
 
-    for champ_name, leave_info in leave_data.items():
-        champ_idx = display_df[display_df['Name'] == champ_name].index
-        if len(champ_idx) > 0:
-            for i, day in enumerate(days):
-                date_str = week_dates[i]
-                date_leave = leave_info.get('date_specific', {}).get(date_str, "")
-                
-                # Date-specific leaves take precedence over leave types
-                if date_leave:
-                    badge_class = ""
-                    if date_leave == "Full Day":
-                        badge_class = "badge-fullday"
-                    elif date_leave == "First Half":
-                        badge_class = "badge-firsthalf"
-                    elif date_leave == "Second Half":
-                        badge_class = "badge-secondhalf"
-                    elif date_leave == "Emergency Leave":
-                        badge_class = "badge-emergency"
-                    
-                    leave_badge = f'<span class="leave-badge {badge_class}">{date_leave[:2]}</span>'
-                    display_df.at[champ_idx[0], day] = leave_badge
-                
-                # Only show leave type badges if no date-specific leave is set
-                elif display_df.at[champ_idx[0], day] == "":
-                    leave_badges = []
-                    
-                    # Check if any leave type is set
-                    if leave_info.get('sick_leave', 0):
-                        leave_badges.append('<span class="leave-badge badge-sl">SL</span>')
-                    if leave_info.get('casual_leave', 0):
-                        leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
-                    if leave_info.get('period_leave', 0):
-                        leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
-                    if leave_info.get('annual_leave', 0):
-                        leave_badges.append('<span class="leave-badge badge-al">AL</span>')
-                    if leave_info.get('comp_off', 0):
-                        leave_badges.append('<span class="leave-badge badge-co">CO</span>')
-                    if leave_info.get('maternity_leave', 0):
-                        leave_badges.append('<span class="leave-badge badge-maternity">MT</span>')
-                    
-                    if leave_badges:
-                        display_df.at[champ_idx[0], day] = " ".join(leave_badges)
+        for champ, off_day in week_offs.items():
+            if off_day in days:
+                champ_idx = display_df[display_df['Name'] == champ].index
+                if len(champ_idx) > 0:
+                    display_df.at[champ_idx[0], off_day] = "WO"
 
-    return display_df
+        for champ_name, leave_info in leave_data.items():
+            champ_idx = display_df[display_df['Name'] == champ_name].index
+            if len(champ_idx) > 0:
+                for i, day in enumerate(days):
+                    date_str = week_dates[i]
+                    date_leave = leave_info.get('date_specific', {}).get(date_str, "")
+                    
+                    # Date-specific leaves take precedence over leave types
+                    if date_leave:
+                        badge_class = ""
+                        if date_leave == "Full Day":
+                            badge_class = "badge-fullday"
+                        elif date_leave == "First Half":
+                            badge_class = "badge-firsthalf"
+                        elif date_leave == "Second Half":
+                            badge_class = "badge-secondhalf"
+                        elif date_leave == "Emergency Leave":
+                            badge_class = "badge-emergency"
+                        
+                        leave_badge = f'<span class="leave-badge {badge_class}">{date_leave[:2]}</span>'
+                        display_df.at[champ_idx[0], day] = leave_badge
+                    
+                    # Only show leave type badges if no date-specific leave is set
+                    elif display_df.at[champ_idx[0], day] == "":
+                        leave_badges = []
+                        
+                        # Check if any leave type is set
+                        if leave_info.get('sick_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-sl">SL</span>')
+                        if leave_info.get('casual_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-cl">CL</span>')
+                        if leave_info.get('period_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-pl">PL</span>')
+                        if leave_info.get('annual_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-al">AL</span>')
+                        if leave_info.get('comp_off', 0):
+                            leave_badges.append('<span class="leave-badge badge-co">CO</span>')
+                        if leave_info.get('maternity_leave', 0):
+                            leave_badges.append('<span class="leave-badge badge-maternity">MT</span>')
+                        
+                        if leave_badges:
+                            display_df.at[champ_idx[0], day] = " ".join(leave_badges)
+
+        return display_df
 
     def calculate_late_hour_coverage(self, roster_df):
         if roster_df is None:
@@ -1811,121 +1758,122 @@ def format_roster_for_display(self, roster_df, week_offs, leave_data):
         
         return validation_results
 
-def show_leave_management(self, leave_data):
-    """Show leave management interface with clear instructions"""
-    st.markdown('<div class="editor-section">', unsafe_allow_html=True)
-    
-    # Close button
-    if st.button("❌ Close Leave Editor", key="close_leave_editor"):
-        st.session_state.show_leave_editor = False
-        st.rerun()
-    
-    st.subheader("🏥 Leave & Weekly Off Management")
-    
-    # Clear instructions
-    st.info("""
+    def show_leave_management(self, leave_data):
+        """Show leave management interface with clear instructions"""
+        st.markdown('<div class="editor-section">', unsafe_allow_html=True)
+        
+        # Close button
+        if st.button("❌ Close Leave Editor", key="close_leave_editor"):
+            st.session_state.show_leave_editor = False
+            st.rerun()
+        
+        st.subheader("🏥 Leave & Weekly Off Management")
+        
+        # Clear instructions
+        st.info("""
     **INSTRUCTIONS:**
     - Use **Leave Types** (SL, CL, PL, AL, CO, MT) for general leave allocation
     - Use **Date-Specific Leaves** for exact days (these take precedence)
     - Date-specific leaves will override leave types for those specific days
     - Weekly off requests are for preferred days off
     """)
-    
-    today = datetime.now()
-    week_start = today - timedelta(days=today.weekday())
-    week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
-    
-    # Create leave editor data
-    leave_editor_data = []
-    for champ in self.champions:
-        champ_name = champ['name']
-        champ_data = {
-            "Champion": champ_name,
-            "Requested Weekly Off": leave_data.get(champ_name, {}).get('requested_weekly_off', "")
+        
+        today = datetime.now()
+        week_start = today - timedelta(days=today.weekday())
+        week_dates = [(week_start + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
+        week_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        st.info(f"**Current Week:** {week_dates[0]} to {week_dates[-1]}")
+        
+        # Create leave editor data
+        leave_editor_data = []
+        for champ in self.champions:
+            champ_name = champ['name']
+            champ_data = {
+                "Champion": champ_name,
+                "Requested Weekly Off": leave_data.get(champ_name, {}).get('requested_weekly_off', "")
+            }
+            
+            # Add leave types
+            for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
+                leave_key = leave_type.lower().replace(' ', '_')
+                champ_data[leave_type] = leave_data.get(champ_name, {}).get(leave_key, 0)
+            
+            # Add daily leave status
+            for i, day in enumerate(week_days):
+                date_str = week_dates[i]
+                day_key = f"{day} ({date_str})"
+                champ_data[day_key] = leave_data.get(champ_name, {}).get('date_specific', {}).get(date_str, "")
+            
+            leave_editor_data.append(champ_data)
+        
+        leave_df = pd.DataFrame(leave_editor_data)
+        
+        # Configure columns
+        column_config = {
+            "Champion": st.column_config.SelectboxColumn(
+                "Champion",
+                options=[champ["name"] for champ in self.champions],
+                required=True
+            ),
+            "Requested Weekly Off": st.column_config.SelectboxColumn(
+                "Requested Weekly Off",
+                options=[""] + week_days,
+                help="Champion's requested weekly off day"
+            )
         }
         
-        # Add leave types
         for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
-            leave_key = leave_type.lower().replace(' ', '_')
-            champ_data[leave_type] = leave_data.get(champ_name, {}).get(leave_key, 0)
-        
-        # Add daily leave status
-        for i, day in enumerate(week_days):
-            date_str = week_dates[i]
-            day_key = f"{day} ({date_str})"
-            champ_data[day_key] = leave_data.get(champ_name, {}).get('date_specific', {}).get(date_str, "")
-        
-        leave_editor_data.append(champ_data)
-    
-    leave_df = pd.DataFrame(leave_editor_data)
-    
-    # Configure columns
-    column_config = {
-        "Champion": st.column_config.SelectboxColumn(
-            "Champion",
-            options=[champ["name"] for champ in self.champions],
-            required=True
-        ),
-        "Requested Weekly Off": st.column_config.SelectboxColumn(
-            "Requested Weekly Off",
-            options=[""] + week_days,
-            help="Champion's requested weekly off day"
-        )
-    }
-    
-    for leave_type in ["Sick Leave", "Casual Leave", "Period Leave", "Annual Leave", "Comp Off", "Maternity Leave"]:
-        column_config[leave_type] = st.column_config.NumberColumn(
-            leave_type,
-            min_value=0,
-            max_value=1,
-            help=f"1 if on {leave_type}, 0 otherwise"
-        )
-    
-    for i, day in enumerate(week_days):
-        date_str = week_dates[i]
-        column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
-            f"{day}",
-            options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
-            help=f"Specific leave for {date_str} (overrides leave types)"
-        )
-    
-    edited_leave_data = st.data_editor(
-        leave_df,
-        column_config=column_config,
-        hide_index=True,
-        use_container_width=True,
-        height=600,
-        key="leave_editor"
-    )
-    
-    # Process the edited leave data
-    new_leave_data = {}
-    for _, row in edited_leave_data.iterrows():
-        champ_name = row["Champion"]
-        leave_info = {
-            'requested_weekly_off': row["Requested Weekly Off"],
-            'sick_leave': row["Sick Leave"],
-            'casual_leave': row["Casual Leave"],
-            'period_leave': row["Period Leave"],
-            'annual_leave': row["Annual Leave"],
-            'comp_off': row["Comp Off"],
-            'maternity_leave': row["Maternity Leave"],
-            'date_specific': {}
-        }
+            column_config[leave_type] = st.column_config.NumberColumn(
+                leave_type,
+                min_value=0,
+                max_value=1,
+                help=f"1 if on {leave_type}, 0 otherwise"
+            )
         
         for i, day in enumerate(week_days):
             date_str = week_dates[i]
-            leave_status = row[f"{day} ({date_str})"]
-            if leave_status:
-                leave_info['date_specific'][date_str] = leave_status
+            column_config[f"{day} ({date_str})"] = st.column_config.SelectboxColumn(
+                f"{day}",
+                options=["", "Full Day", "First Half", "Second Half", "Emergency Leave"],
+                help=f"Specific leave for {date_str} (overrides leave types)"
+            )
         
-        new_leave_data[champ_name] = leave_info
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    return new_leave_data
+        edited_leave_data = st.data_editor(
+            leave_df,
+            column_config=column_config,
+            hide_index=True,
+            use_container_width=True,
+            height=600,
+            key="leave_editor"
+        )
+        
+        # Process the edited leave data
+        new_leave_data = {}
+        for _, row in edited_leave_data.iterrows():
+            champ_name = row["Champion"]
+            leave_info = {
+                'requested_weekly_off': row["Requested Weekly Off"],
+                'sick_leave': row["Sick Leave"],
+                'casual_leave': row["Casual Leave"],
+                'period_leave': row["Period Leave"],
+                'annual_leave': row["Annual Leave"],
+                'comp_off': row["Comp Off"],
+                'maternity_leave': row["Maternity Leave"],
+                'date_specific': {}
+            }
+            
+            for i, day in enumerate(week_days):
+                date_str = week_dates[i]
+                leave_status = row[f"{day} ({date_str})"]
+                if leave_status:
+                    leave_info['date_specific'][date_str] = leave_status
+            
+            new_leave_data[champ_name] = leave_info
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        return new_leave_data
+
     def format_excel_for_download(self, roster_df, week_offs, leave_data, analysis_data):
         """Format the Excel file to match the desired image format"""
         # Create a new workbook
@@ -2278,7 +2226,7 @@ def main():
         st.subheader("Download Data Template")
         st.write("Download this template, add your call volume data, and upload it back.")
 
-        template_data = optimizer.createtemplatefile()
+        template_data = optimizer.create_template_file()
 
         st.download_button(
             "📥 Download Data Template",
