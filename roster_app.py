@@ -1696,32 +1696,32 @@ def get_non_morning_shift_for_champ(self, champ):
         return validation_results
 
     def validate_morning_coverage(self, roster_df):
-    """Validate that 2-3 champions are available at 7 AM each day"""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    validation_results = {}
+        """Validate that 2-3 champions are available at 7 AM each day"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        validation_results = {}
     
-    for day in days:
-        day_roster = roster_df[roster_df['Day'] == day]
-        morning_champs = 0
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            morning_champs = 0
         
-        for _, row in day_roster.iterrows():
-            if self.is_agent_working_at_hour(row, 7):  # 7 AM
-                morning_champs += 1
+            for _, row in day_roster.iterrows():
+                if self.is_agent_working_at_hour(row, 7):  # 7 AM
+                    morning_champs += 1
         
-        if 2 <= morning_champs <= 3:  # UPDATED RANGE
-            status = '✅ Perfect'
-        elif morning_champs > 3:  # UPDATED RANGE
-            status = '🟡 Overstaffed'
-        else:
-            status = '🔴 Insufficient'
+            if 2 <= morning_champs <= 3:  # UPDATED RANGE
+                status = '✅ Perfect'
+            elif morning_champs > 3:  # UPDATED RANGE
+                status = '🟡 Overstaffed'
+            else:
+                status = '🔴 Insufficient'
         
-        validation_results[day] = {
-            'morning_champs': morning_champs,
-            'status': status,
-            'within_range': 2 <= morning_champs <= 3  # UPDATED RANGE
-        }
+            validation_results[day] = {
+                'morning_champs': morning_champs,
+                'status': status,
+                'within_range': 2 <= morning_champs <= 3  # UPDATED RANGE
+            }
     
-    return validation_results
+        return validation_results
 
     def validate_al_by_hour(self, roster_df, analysis_data):
         """Validate Answer Level for each hour of each day"""
