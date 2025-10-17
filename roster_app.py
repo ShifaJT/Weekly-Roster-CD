@@ -119,6 +119,24 @@ st.markdown("""
     border-left: 4px solid #28a745;
     margin: 1rem 0;
 }
+.coverage-critical {
+    background-color: #ffcccc;
+    padding: 0.5rem;
+    border-radius: 0.3rem;
+    border-left: 4px solid #ff0000;
+}
+.coverage-warning {
+    background-color: #fff4cc;
+    padding: 0.5rem;
+    border-radius: 0.3rem;
+    border-left: 4px solid #ffcc00;
+}
+.coverage-good {
+    background-color: #ccffcc;
+    padding: 0.5rem;
+    border-radius: 0.3rem;
+    border-left: 4px solid #00cc00;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -229,7 +247,7 @@ class CallCenterRosterOptimizer:
         return self.shift_patterns[1]  # 8-5 shift
 
     def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=3):
-        """Get appropriate shift pattern considering gender constraints and time preferences - DETERMINISTIC VERSION"""
+        """Get appropriate shift pattern considering gender constraints and time preferences - FIXED VERSION"""
         
         # Use a hash of the champion name for deterministic assignment
         champ_hash = hash(champ['name'])
@@ -247,17 +265,17 @@ class CallCenterRosterOptimizer:
                 early_shifts = sorted(self.shift_patterns, key=lambda x: x['times'][-1])
                 return early_shifts[0] if early_shifts else self.shift_patterns[0]
         
-        # FEMALE CHAMPIONS WHO CAN SPLIT: Prefer earlier shifts but allow flexibility
+        # FEMALE CHAMPIONS WHO CAN SPLIT: Can work until 8 PM
         elif champ['gender'] == 'F' and champ['can_split']:
-            # Prefer shifts ending by 8 PM for female champions
-            preferred_shifts = [s for s in self.shift_patterns 
+            # Allow shifts ending by 8 PM for female champions who can split
+            appropriate_shifts = [s for s in self.shift_patterns 
                               if s['times'][-1] <= 20]  # Ends by 8 PM
             
-            if preferred_shifts:
-                shift_idx = champ_hash % len(preferred_shifts)
-                return preferred_shifts[shift_idx]
+            if appropriate_shifts:
+                shift_idx = champ_hash % len(appropriate_shifts)
+                return appropriate_shifts[shift_idx]
             else:
-                # If no preferred shifts, use normal logic
+                # If no appropriate shifts, fall back to normal logic
                 if champ_hash % 10 < 3:  # 30% chance for split (deterministic)
                     split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
                     if split_shifts:
@@ -1424,18 +1442,19 @@ class CallCenterRosterOptimizer:
         return pd.DataFrame(adjusted_data)
 
     def assign_weekly_offs_with_requests(self, roster_df, leave_data, max_offs_per_day=None, min_split_champs=4):
+        """FIXED VERSION: Assign weekly offs with proper distribution"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
-        # Set different maximum weekly offs per day based on call volume
+        # Set maximum weekly offs per day as requested
         if max_offs_per_day is None:
             max_offs_per_day = {
-                "Monday": 4,    # Higher call volume days - fewer offs
-                "Tuesday": 4,   # Higher call volume days - fewer offs
-                "Wednesday": 4, # Higher call volume days - fewer offs
-                "Thursday": 4,  # Medium call volume
-                "Friday": 4,    # Medium call volume
-                "Saturday": 5,  # Lower call volume - more offs allowed
-                "Sunday": 5     # Lower call volume - more offs allowed
+                "Monday": 4,    # Max 4 on Monday
+                "Tuesday": 4,   # Max 4 on Tuesday  
+                "Wednesday": 4, # Max 4 on Wednesday
+                "Thursday": 4,  # Max 4 on Thursday
+                "Friday": 4,    # Max 4 on Friday
+                "Saturday": 5,  # Max 5 on Saturday
+                "Sunday": 5     # Max 5 on Sunday
             }
     
         champions = roster_df['Champion'].unique()
@@ -1465,28 +1484,15 @@ class CallCenterRosterOptimizer:
         
             if len(champ_days) == 7:
                 # Champion works all days, need to assign an off day
-                # Prioritize days with higher call volume first (Mon-Wed)
                 available_off_days = []
             
-                # Try high volume days first (Mon-Wed)
-                for day in ["Monday", "Tuesday", "Wednesday"]:
+                # Try to balance distribution across all days
+                for day in days:
                     if offs_per_day[day] < max_offs_per_day[day]:
                         available_off_days.append(day)
             
-                # If no high volume days available, try medium volume days
-                if not available_off_days:
-                    for day in ["Thursday", "Friday"]:
-                        if offs_per_day[day] < max_offs_per_day[day]:
-                            available_off_days.append(day)
-            
-                # If still no days available, try low volume days
-                if not available_off_days:
-                    for day in ["Saturday", "Sunday"]:
-                        if offs_per_day[day] < max_offs_per_day[day]:
-                            available_off_days.append(day)
-            
                 if available_off_days:
-                    # Prefer days that already have some offs to balance the distribution
+                    # Choose the day with the least current offs to balance distribution
                     available_off_days.sort(key=lambda x: offs_per_day[x])
                     day_off = available_off_days[0]
                     week_offs[champion] = day_off
@@ -1517,15 +1523,22 @@ class CallCenterRosterOptimizer:
         return updated_roster, week_offs
     
     def apply_special_rules(self, roster_df):
-        revathi_mask = roster_df['Champion'] == 'Revathi'
-        roster_df.loc[revathi_mask, 'Shift Type'] = 'Split'
-
-        for idx in roster_df[revathi_mask].index:
-            pattern = self.shift_patterns[6]
-            roster_df.at[idx, 'Start Time'] = pattern['display']
-            roster_df.at[idx, 'End Time'] = f"{pattern['times'][3]:02d}:00"
-            roster_df.at[idx, 'Duration'] = '9.5 hours (with break)'
-
+        """Apply special rules for specific champions"""
+        # Ensure Anjali (who can split) doesn't work past 8 PM
+        anjali_mask = roster_df['Champion'] == 'Anjali'
+        for idx in roster_df[anjali_mask].index:
+            current_shift = roster_df.at[idx, 'Start Time']
+            # If Anjali has a shift ending after 8 PM, change it
+            if '21:00' in current_shift:
+                # Assign a shift ending by 8 PM
+                appropriate_shifts = [s for s in self.shift_patterns if s['times'][-1] <= 20]
+                if appropriate_shifts:
+                    new_shift = appropriate_shifts[hash('Anjali') % len(appropriate_shifts)]
+                    roster_df.at[idx, 'Start Time'] = new_shift['display']
+                    roster_df.at[idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
+                    roster_df.at[idx, 'Duration'] = f"{new_shift['hours']} hours"
+                    roster_df.at[idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
+        
         return roster_df
 
     def apply_manual_splits(self, roster_df, manual_splits):
@@ -1730,7 +1743,7 @@ class CallCenterRosterOptimizer:
         return validation_results
 
     def validate_female_shifts(self, roster_df):
-        """Validate that female champions don't work past their allowed times"""
+        """Validate that female champions don't work past their allowed times - FIXED VERSION"""
         validation_results = {}
         
         female_champs = [champ for champ in self.champions if champ['gender'] == 'F']
@@ -1744,10 +1757,10 @@ class CallCenterRosterOptimizer:
                 if 'End Time' in row and row['End Time']:
                     try:
                         end_time = int(row['End Time'].split(':')[0])
-                        # Female who cannot split: should end by 7 PM
+                        # Female who cannot split: should end by 7 PM (19:00)
                         if not champ['can_split'] and end_time > 19:
                             violations.append(f"{row['Day']}: ends at {row['End Time']} (should end by 7 PM)")
-                        # Female who can split: should end by 8 PM
+                        # Female who can split: should end by 8 PM (20:00)  
                         elif champ['can_split'] and end_time > 20:
                             violations.append(f"{row['Day']}: ends at {row['End Time']} (should end by 8 PM)")
                     except:
@@ -2096,7 +2109,7 @@ class CallCenterRosterOptimizer:
         return excel_buffer.getvalue()
 
     def get_hiring_recommendations(self, roster_df, analysis_data):
-        """Calculate hiring recommendations to maintain 95% AL"""
+        """Calculate hiring recommendations to maintain 95% AL - IMPROVED VERSION"""
         # Calculate current AL
         current_al = self.calculate_answer_rate(roster_df, analysis_data)
         
@@ -2151,12 +2164,24 @@ class CallCenterRosterOptimizer:
         else:
             new_al = current_al
         
+        # Enhanced recommendation based on call flow analysis
+        recommendation_text = ""
+        if current_al < 85:
+            recommendation_text = "CRITICAL: Immediate hiring required to maintain service levels"
+        elif current_al < 90:
+            recommendation_text = "HIGH: Hiring recommended to ensure consistent service quality"
+        elif current_al < 95:
+            recommendation_text = "MODERATE: Consider hiring to reach target service levels"
+        else:
+            recommendation_text = "LOW: Current staffing appears adequate"
+        
         return {
             'current_staffing': f"{len([c for c in self.champions if c['status'] == 'Active'])} active champions",
             'current_al': f"{current_al:.1f}%",
             'recommended_new_hires': f"{new_hires_needed} champions",
             'language_priority': ", ".join([f"{lang.upper()}" for lang, count in language_priority[:3]]),
-            'target_al_with_new_hires': f"{new_al:.1f}%"
+            'target_al_with_new_hires': f"{new_al:.1f}%",
+            'recommendation_level': recommendation_text
         }
 
     def show_champion_editor(self):
@@ -2571,6 +2596,14 @@ def main():
         with col4:
             st.metric("Target AL with New Hires", hiring_rec['target_al_with_new_hires'])
         
+        # Enhanced recommendation display
+        if hiring_rec['current_al'] < "85.0%":
+            st.markdown(f'<div class="coverage-critical"><strong>🚨 {hiring_rec["recommendation_level"]}</strong></div>', unsafe_allow_html=True)
+        elif hiring_rec['current_al'] < "90.0%":
+            st.markdown(f'<div class="coverage-warning"><strong>⚠️ {hiring_rec["recommendation_level"]}</strong></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="coverage-good"><strong>✅ {hiring_rec["recommendation_level"]}</strong></div>', unsafe_allow_html=True)
+            
         st.info(f"**Recommendation:** Hire {hiring_rec['recommended_new_hires']} champions with priority on {hiring_rec['language_priority']} languages to maintain 95%+ AL")
         st.markdown('</div>', unsafe_allow_html=True)
         
