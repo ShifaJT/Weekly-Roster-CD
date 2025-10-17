@@ -2238,7 +2238,7 @@ class CallCenterRosterOptimizer:
                 ),
                 "Status": st.column_config.SelectboxColumn(
                     "Status",
-                    options["Active", "Maternity"],
+                    options=["Active", "Maternity"],
                     required=True
                 )
             },
