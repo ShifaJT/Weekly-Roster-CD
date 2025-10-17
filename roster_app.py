@@ -112,6 +112,13 @@ st.markdown("""
     margin-bottom: 1rem;
     border: 1px solid #e9ecef;
 }
+.hiring-recommendation {
+    background-color: #e8f5e8;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border-left: 4px solid #28a745;
+    margin: 1rem 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,7 +139,7 @@ class CallCenterRosterOptimizer:
             {"name": "12-9", "times": (12, 21), "display": "12:00 to 21:00", "hours": 9, "type": "straight"},
             {"name": "7-12 & 4-9", "times": (7, 12, 16, 21), "display": "07:00 to 12:00 & 16:30 to 21:00", "hours": 9.5, "type": "split"},
             {"name": "8-1 & 5-9", "times": (8, 13, 17, 21), "display": "08:00 to 13:00 & 17:00 to 21:00", "hours": 9, "type": "split"},
-            {"name": "9-2 & 6-9", "times": (10, 15, 17, 21), "display": "09:00 to 14:00 & 18:00 to 21:00", "hours": 8, "type": "split"},
+            {"name": "9-2 & 6-9", "times": (9, 14, 18, 21), "display": "09:00 to 14:00 & 18:00 to 21:00", "hours": 8, "type": "split"},
         ]
 
         self.AVERAGE_HANDLING_TIME_SECONDS = 202
@@ -143,34 +150,33 @@ class CallCenterRosterOptimizer:
 
     def load_champions(self):
         return [
-            {"name": "Revathi", "primary_lang": "ka", "secondary_langs": ["hi", "te", "ta"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Pasang", "primary_lang": "ka", "secondary_langs": ["hi", "ta"], "calls_per_hour": 13, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Kavya S", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 15, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Anjali", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": False, "gender": "F", "status": "Active"},
-            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
-            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Alwin", "primary_lang": "hi", "secondary_langs": ["ka"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Anjali", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Active"},
+            {"name": "Baloji", "primary_lang": "te", "secondary_langs": [], "calls_per_hour": 13, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Binita Kongadi", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 13, "can_split": True, "gender": "F", "status": "Active"},
+            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Maternity"},
             {"name": "Divya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
-            {"name": "Mohammed Altaf", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Rakshith", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Dundesh", "primary_lang": "ka", "secondary_langs": ["te", "hi"], "calls_per_hour": 14, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Jyothika", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True, "gender": "F", "status": "Active"},
+            {"name": "Kavya S", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": False, "gender": "F", "status": "Active"},
             {"name": "M Showkath Nawaz", "primary_lang": "ka", "secondary_langs": ["hi", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
-            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 11, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Guruswamy", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": False, "gender": "M", "status": "Active"},
-            {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Baloji", "primary_lang": "te", "secondary_langs": [], "calls_per_hour": 11, "can_split": False, "gender": "M", "status": "Active"},
-            {"name": "waghmare", "primary_lang": "te", "secondary_langs": ["hi", "ka"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
-            {"name": "Deepika", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Maternity"}
+            {"name": "Malikarjun Patil", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 15, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Marcelina J", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": False, "gender": "F", "status": "Active"},
+            {"name": "Mohammed Altaf", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Muthahir", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": False, "gender": "M", "status": "Active"},
+            {"name": "Navya", "primary_lang": "ka", "secondary_langs": ["te", "ta"], "calls_per_hour": 12, "can_split": False, "gender": "F", "status": "Active"},
+            {"name": "Pasang", "primary_lang": "ka", "secondary_langs": ["hi", "ta"], "calls_per_hour": 13, "can_split": False, "gender": "F", "status": "Active"},
+            {"name": "Pooja N", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 14, "can_split": True, "gender": "F", "status": "Active"},
+            {"name": "Rakesh", "primary_lang": "ka", "secondary_langs": ["ta"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Rakshith", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 15, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Revathi", "primary_lang": "ka", "secondary_langs": ["hi", "te", "ta"], "calls_per_hour": 12, "can_split": True, "gender": "F", "status": "Maternity"},
+            {"name": "Sadanad", "primary_lang": "ka", "secondary_langs": ["hi"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Sameer Pasha", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 14, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Shashindra", "primary_lang": "hi", "secondary_langs": ["ka", "te"], "calls_per_hour": 11, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Sheikh Vali Babu", "primary_lang": "hi", "secondary_langs": ["te"], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Soubhikotl", "primary_lang": "hi", "secondary_langs": [], "calls_per_hour": 13, "can_split": True, "gender": "M", "status": "Active"},
+            {"name": "Vishal", "primary_lang": "ka", "secondary_langs": ["te"], "calls_per_hour": 12, "can_split": True, "gender": "M", "status": "Active"}
         ]
 
     def update_champion(self, old_name, new_data):
@@ -222,7 +228,7 @@ class CallCenterRosterOptimizer:
         # Fallback
         return self.shift_patterns[1]  # 8-5 shift
 
-    def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=4):
+    def get_appropriate_shift(self, champ, morning_shifts_per_day=None, max_morning_shifts=3):
         """Get appropriate shift pattern considering gender constraints and time preferences - DETERMINISTIC VERSION"""
         
         # Use a hash of the champion name for deterministic assignment
@@ -807,6 +813,9 @@ class CallCenterRosterOptimizer:
             # ENSURE EXACTLY 3 CHAMPIONS AT 7 AM
             roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=3)
             
+            # ENSURE AT LEAST 2 SPLIT SHIFT CHAMPIONS
+            roster_df = self.enforce_split_shift_coverage(roster_df, min_split_champs=2)
+            
             return roster_df
             
         except Exception as e:
@@ -840,6 +849,21 @@ class CallCenterRosterOptimizer:
         
         return roster_df
 
+    def enforce_split_shift_coverage(self, roster_df, min_split_champs=2):
+        """Ensure each day has at least minimum split shift champions"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            split_champs = len(day_roster[day_roster['Shift Type'] == 'Split'])
+            
+            # If we need more split shift champions
+            if split_champs < min_split_champs:
+                needed = min_split_champs - split_champs
+                roster_df = self.add_split_shift_champions(roster_df, day, needed)
+        
+        return roster_df
+
     def add_morning_champions(self, roster_df, day, count_needed):
         """Add morning champions to a specific day"""
         # Get champions already working this day
@@ -870,6 +894,45 @@ class CallCenterRosterOptimizer:
                     'Duration': f'{morning_shift["hours"]} hours',
                     'Calls/Hour Capacity': champ['calls_per_hour'],
                     'Can Split': 'Yes' if champ['can_split'] else 'No',
+                    'Gender': champ['gender'],
+                    'Status': champ['status']
+                }
+                
+                # Add to roster
+                roster_df = pd.concat([roster_df, pd.DataFrame([new_row])], ignore_index=True)
+        
+        return roster_df
+
+    def add_split_shift_champions(self, roster_df, day, count_needed):
+        """Add split shift champions to a specific day"""
+        # Get champions already working this day
+        day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
+        
+        # Find available champions who can work split shifts and are not already working this day
+        available_champs = []
+        for champ in self.champions:
+            if (champ['name'] not in day_workers and  # Not already working this day
+                champ['status'] == 'Active' and  # Only active champions
+                champ['can_split']):  # Can work split shifts
+                available_champs.append(champ)
+        
+        # Add split shift workers
+        for i in range(min(count_needed, len(available_champs))):
+            champ = available_champs[i]
+            split_shift = self.get_split_shift_for_champ(champ)
+            
+            if split_shift:
+                new_row = {
+                    'Day': day,
+                    'Champion': champ['name'],
+                    'Primary Language': champ['primary_lang'].upper(),
+                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                    'Shift Type': 'Split',
+                    'Start Time': split_shift['display'],
+                    'End Time': f"{split_shift['times'][-1]:02d}:00",
+                    'Duration': f'{split_shift["hours"]} hours',
+                    'Calls/Hour Capacity': champ['calls_per_hour'],
+                    'Can Split': 'Yes',
                     'Gender': champ['gender'],
                     'Status': champ['status']
                 }
@@ -925,6 +988,21 @@ class CallCenterRosterOptimizer:
         
         if morning_shifts:
             return morning_shifts[hash(champ['name']) % len(morning_shifts)]
+        return None
+
+    def get_split_shift_for_champ(self, champ):
+        """Get appropriate split shift for a champion"""
+        split_shifts = [s for s in self.shift_patterns if s['type'] == 'split']
+        
+        if champ['gender'] == 'F':
+            # For female champions, prefer shifts ending by 8 PM
+            appropriate_shifts = [s for s in split_shifts if s['times'][-1] <= 20]
+            if appropriate_shifts:
+                return appropriate_shifts[hash(champ['name']) % len(appropriate_shifts)]
+        
+        # For male champions or if no appropriate female shifts, return any split shift
+        if split_shifts:
+            return split_shifts[hash(champ['name']) % len(split_shifts)]
         return None
 
     def get_non_morning_shift_for_champ(self, champ):
@@ -1035,8 +1113,9 @@ class CallCenterRosterOptimizer:
         
         roster_df = pd.DataFrame(roster_data)
         
-        # Ensure exactly 3 champions at 7 AM
+        # Ensure exactly 3 champions at 7 AM and at least 2 split shifts
         roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=3)
+        roster_df = self.enforce_split_shift_coverage(roster_df, min_split_champs=2)
         
         return roster_df
 
@@ -1997,12 +2076,88 @@ class CallCenterRosterOptimizer:
         ws_analysis.cell(row=row_idx+6, column=1, value="Expected Answer Rate")
         ws_analysis.cell(row=row_idx+6, column=2, value=f"{answer_rate}%")
         
+        # Add hiring recommendations
+        hiring_rec = self.get_hiring_recommendations(roster_df, analysis_data)
+        ws_analysis.cell(row=row_idx+8, column=1, value="Hiring Recommendations").font = Font(bold=True, size=14)
+        ws_analysis.cell(row=row_idx+9, column=1, value="Current Staffing")
+        ws_analysis.cell(row=row_idx+9, column=2, value=hiring_rec['current_staffing'])
+        ws_analysis.cell(row=row_idx+10, column=1, value="Recommended New Hires")
+        ws_analysis.cell(row=row_idx+10, column=2, value=hiring_rec['recommended_new_hires'])
+        ws_analysis.cell(row=row_idx+11, column=1, value="Language Priority")
+        ws_analysis.cell(row=row_idx+11, column=2, value=hiring_rec['language_priority'])
+        ws_analysis.cell(row=row_idx+12, column=1, value="Target AL with New Hires")
+        ws_analysis.cell(row=row_idx+12, column=2, value=f"{hiring_rec['target_al_with_new_hires']}%")
+        
         # Save to buffer
         excel_buffer = BytesIO()
         wb.save(excel_buffer)
         excel_buffer.seek(0)
         
         return excel_buffer.getvalue()
+
+    def get_hiring_recommendations(self, roster_df, analysis_data):
+        """Calculate hiring recommendations to maintain 95% AL"""
+        # Calculate current AL
+        current_al = self.calculate_answer_rate(roster_df, analysis_data)
+        
+        # Calculate required capacity for 95% AL
+        required_capacity_for_95 = analysis_data['total_daily_calls'] * 7 * 0.95
+        
+        # Calculate current capacity
+        current_capacity = 0
+        for _, row in roster_df.iterrows():
+            if row['Shift Type'] == 'Straight':
+                hours_worked = 9
+            else:
+                shifts = row['Start Time'].split(' & ')
+                hours_worked = 0
+                for shift in shifts:
+                    times = shift.split(' to ')
+                    start_hour = int(times[0].split(':')[0])
+                    end_hour = int(times[1].split(':')[0])
+                    hours_worked += (end_hour - start_hour)
+            current_capacity += row['Calls/Hour Capacity'] * hours_worked
+        
+        # Calculate capacity gap
+        capacity_gap = max(0, required_capacity_for_95 - current_capacity)
+        
+        # Estimate new hires needed (assuming average 12 calls/hour and 9-hour shifts)
+        avg_calls_per_hour = 12
+        avg_hours_per_day = 9
+        avg_daily_capacity_per_agent = avg_calls_per_hour * avg_hours_per_day
+        avg_weekly_capacity_per_agent = avg_daily_capacity_per_agent * 5  # 5 working days
+        
+        new_hires_needed = max(0, int(np.ceil(capacity_gap / avg_weekly_capacity_per_agent)))
+        
+        # Language priority analysis
+        language_distribution = {}
+        for champ in self.champions:
+            if champ['status'] == 'Active':
+                # Primary language
+                lang = champ['primary_lang']
+                language_distribution[lang] = language_distribution.get(lang, 0) + 1
+                # Secondary languages
+                for sec_lang in champ['secondary_langs']:
+                    language_distribution[sec_lang] = language_distribution.get(sec_lang, 0) + 1
+        
+        # Sort languages by current coverage (ascending - need more of the least covered)
+        language_priority = sorted(language_distribution.items(), key=lambda x: x[1])
+        
+        # Calculate expected AL with new hires
+        if new_hires_needed > 0:
+            additional_capacity = new_hires_needed * avg_weekly_capacity_per_agent
+            new_total_capacity = current_capacity + additional_capacity
+            new_al = min(100, (new_total_capacity / (analysis_data['total_daily_calls'] * 7)) * 100)
+        else:
+            new_al = current_al
+        
+        return {
+            'current_staffing': f"{len([c for c in self.champions if c['status'] == 'Active'])} active champions",
+            'current_al': f"{current_al:.1f}%",
+            'recommended_new_hires': f"{new_hires_needed} champions",
+            'language_priority': ", ".join([f"{lang.upper()}" for lang, count in language_priority[:3]]),
+            'target_al_with_new_hires': f"{new_al:.1f}%"
+        }
 
     def show_champion_editor(self):
         """Show champion editor interface with close button"""
@@ -2190,7 +2345,7 @@ def main():
         st.subheader("Active Split Shift Champions")
         active_split_champs = st.slider(
             "Minimum Active Split Shift Champions per Day",
-            min_value=3,
+            min_value=2,
             max_value=8,
             value=4,
             help="Set the minimum number of split shift champions that must be active each day"
@@ -2399,6 +2554,25 @@ def main():
             st.metric("Utilization Rate", f"{st.session_state.metrics['utilization_rate']:.1f}%")
         with col4:
             st.metric("Expected Answer Rate", f"{st.session_state.answer_rate:.1f}%")
+        
+        # Hiring recommendations
+        st.markdown('<div class="hiring-recommendation">', unsafe_allow_html=True)
+        st.subheader("💼 Staffing Recommendations")
+        
+        hiring_rec = optimizer.get_hiring_recommendations(st.session_state.roster_df, st.session_state.analysis_data)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Current Staffing", hiring_rec['current_staffing'])
+        with col2:
+            st.metric("Recommended New Hires", hiring_rec['recommended_new_hires'])
+        with col3:
+            st.metric("Language Priority", hiring_rec['language_priority'])
+        with col4:
+            st.metric("Target AL with New Hires", hiring_rec['target_al_with_new_hires'])
+        
+        st.info(f"**Recommendation:** Hire {hiring_rec['recommended_new_hires']} champions with priority on {hiring_rec['language_priority']} languages to maintain 95%+ AL")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Daily answer rates chart
         daily_rates_df = pd.DataFrame({
