@@ -569,26 +569,6 @@ class CallCenterRosterOptimizer:
         
         return roster_df
         
-def create_simple_template(self):
-    """Create a simple fallback template"""
-    try:
-        # Simple hourly data template
-        hourly_data = pd.DataFrame({
-            'Hour': list(range(7, 22)),
-            'Calls': [0] * 15
-        })
-
-        excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
-        
-        excel_buffer.seek(0)
-        return excel_buffer.getvalue()
-    except Exception as e:
-        st.error(f"Even simple template failed: {str(e)}")
-        # Return empty bytes as last resort
-        return b''
-
     def analyze_excel_data(self, uploaded_file):
         try:
             try:
@@ -888,6 +868,7 @@ def create_simple_template(self):
             st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
 
+# FIX THIS METHOD (around line 880) - it should be INSIDE the class
 def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
     """Ensure each day has exactly 3 champions starting at 7 AM"""
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -1189,43 +1170,44 @@ def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
             return (shift['times'][0] <= hour < shift['times'][1]) or (shift['times'][2] <= hour < shift['times'][3])
 
 def generate_roster(self, analysis_data, manual_splits=None, selected_languages=None):
-        try:
-            available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
-            
-            if selected_languages:
-                available_champions = [champ for champ in available_champions 
-                                     if champ['primary_lang'] in selected_languages 
-                                     or any(lang in selected_languages for lang in champ['secondary_langs'])]
-            
-            if 'language_volume' in analysis_data:
-                roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
-            else:
-                roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
-            
-            roster_df = self.fix_morning_overstaffing(roster_df)
-            
-            roster_df = self.fill_missing_days(roster_df, available_champions)
-            
-            roster_df = self.apply_special_rules(roster_df)
-
-            if manual_splits:
-                roster_df = self.apply_manual_splits(roster_df, manual_splits)
-
-            active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
-            roster_df, week_offs = self.assign_weekly_offs_with_requests(
-                roster_df, 
-                analysis_data.get('leave_data', {}), 
-                min_split_champs=active_split_champs
-            )  
-
-            return roster_df, week_offs
-
-        except Exception as e:
-            st.error(f"Error generating roster: {str(e)}")
-            import traceback
-            st.error(traceback.format_exc())
-            return None, None
+    try:
+        available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
         
+        if selected_languages:
+            available_champions = [champ for champ in available_champions 
+                                 if champ['primary_lang'] in selected_languages 
+                                 or any(lang in selected_languages for lang in champ['secondary_langs'])]
+        
+        if 'language_volume' in analysis_data:
+            roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
+        else:
+            roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
+        
+        roster_df = self.fix_morning_overstaffing(roster_df)
+        
+        roster_df = self.fill_missing_days(roster_df, available_champions)
+        
+        roster_df = self.apply_special_rules(roster_df)
+
+        if manual_splits:
+            roster_df = self.apply_manual_splits(roster_df, manual_splits)
+
+        active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
+        roster_df, week_offs = self.assign_weekly_offs_with_requests(
+            roster_df, 
+            analysis_data.get('leave_data', {}), 
+            min_split_champs=active_split_champs
+        )  
+
+        return roster_df, week_offs
+
+    except Exception as e:
+        st.error(f"Error generating roster: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return None, None
+        
+# FIX THIS METHOD (around line 1200) - it should be INSIDE the class
 def fill_missing_days(self, roster_df, available_champions):
     """Ensure every active champion has exactly 5 working days"""
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
