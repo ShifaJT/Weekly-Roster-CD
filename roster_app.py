@@ -868,30 +868,29 @@ class CallCenterRosterOptimizer:
             st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
 
-# FIX THIS METHOD (around line 880) - it should be INSIDE the class
-def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
-    """Ensure each day has exactly 3 champions starting at 7 AM"""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    for day in days:
-        day_roster = roster_df[roster_df['Day'] == day]
-        morning_champs = 0
+    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
+        """Ensure each day has exactly 3 champions starting at 7 AM"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
-        # Count ONLY champions starting exactly at 7 AM
-        for _, row in day_roster.iterrows():
-            start_time = row['Start Time']
-            if start_time and '07:' in start_time:  # Only count those starting at 7 AM
-                morning_champs += 1
+        for day in days:
+            day_roster = roster_df[roster_df['Day'] == day]
+            morning_champs = 0
+            
+            # Count ONLY champions starting exactly at 7 AM
+            for _, row in day_roster.iterrows():
+                start_time = row['Start Time']
+                if start_time and '07:' in start_time:  # Only count those starting at 7 AM
+                    morning_champs += 1
+            
+            # Adjust if needed - FIXED LOGIC
+            if morning_champs < min_champs:
+                needed = min_champs - morning_champs
+                roster_df = self.add_morning_champions(roster_df, day, needed)
+            elif morning_champs > max_champs:
+                excess = morning_champs - max_champs
+                roster_df = self.reduce_morning_champions(roster_df, day, excess)
         
-        # Adjust if needed - FIXED LOGIC
-        if morning_champs < min_champs:
-            needed = min_champs - morning_champs
-            roster_df = self.add_morning_champions(roster_df, day, needed)
-        elif morning_champs > max_champs:
-            excess = morning_champs - max_champs
-            roster_df = self.reduce_morning_champions(roster_df, day, excess)
-    
-    return roster_df
+        return roster_df
 
     def enforce_split_shift_coverage(self, roster_df, min_split_champs=2):
         """Ensure each day has at least minimum split shift champions"""
@@ -1169,95 +1168,94 @@ def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
         else:
             return (shift['times'][0] <= hour < shift['times'][1]) or (shift['times'][2] <= hour < shift['times'][3])
 
-def generate_roster(self, analysis_data, manual_splits=None, selected_languages=None):
-    try:
-        available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
-        
-        if selected_languages:
-            available_champions = [champ for champ in available_champions 
-                                 if champ['primary_lang'] in selected_languages 
-                                 or any(lang in selected_languages for lang in champ['secondary_langs'])]
-        
-        if 'language_volume' in analysis_data:
-            roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
-        else:
-            roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
-        
-        roster_df = self.fix_morning_overstaffing(roster_df)
-        
-        roster_df = self.fill_missing_days(roster_df, available_champions)
-        
-        roster_df = self.apply_special_rules(roster_df)
-
-        if manual_splits:
-            roster_df = self.apply_manual_splits(roster_df, manual_splits)
-
-        active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
-        roster_df, week_offs = self.assign_weekly_offs_with_requests(
-            roster_df, 
-            analysis_data.get('leave_data', {}), 
-            min_split_champs=active_split_champs
-        )  
-
-        return roster_df, week_offs
-
-    except Exception as e:
-        st.error(f"Error generating roster: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
-        return None, None
-        
-# FIX THIS METHOD (around line 1200) - it should be INSIDE the class
-def fill_missing_days(self, roster_df, available_champions):
-    """Ensure every active champion has exactly 5 working days"""
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    # Get current assignments
-    current_assignments = {}
-    for _, row in roster_df.iterrows():
-        champ = row['Champion']
-        day = row['Day']
-        if champ not in current_assignments:
-            current_assignments[champ] = set()
-        current_assignments[champ].add(day)
-    
-    # Fill missing days for active champions
-    new_roster_data = []
-    active_champions = [champ for champ in available_champions if champ['status'] == 'Active']
-    
-    for champ in active_champions:
-        champ_name = champ['name']
-        assigned_days = current_assignments.get(champ_name, set())
-        
-        # If champion has less than 5 days, add missing days
-        if len(assigned_days) < 5:
-            missing_days = [day for day in days if day not in assigned_days]
-            # Use deterministic selection to choose exactly 5 days total
-            days_to_add = missing_days[:5 - len(assigned_days)]
+    def generate_roster(self, analysis_data, manual_splits=None, selected_languages=None):
+        try:
+            available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
             
-            for day in days_to_add:
-                shift_pattern = self.get_appropriate_shift(champ)
+            if selected_languages:
+                available_champions = [champ for champ in available_champions 
+                                     if champ['primary_lang'] in selected_languages 
+                                     or any(lang in selected_languages for lang in champ['secondary_langs'])]
+            
+            if 'language_volume' in analysis_data:
+                roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
+            else:
+                roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
+            
+            roster_df = self.fix_morning_overstaffing(roster_df)
+            
+            roster_df = self.fill_missing_days(roster_df, available_champions)
+            
+            roster_df = self.apply_special_rules(roster_df)
+
+            if manual_splits:
+                roster_df = self.apply_manual_splits(roster_df, manual_splits)
+
+            active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
+            roster_df, week_offs = self.assign_weekly_offs_with_requests(
+                roster_df, 
+                analysis_data.get('leave_data', {}), 
+                min_split_champs=active_split_champs
+            )  
+
+            return roster_df, week_offs
+
+        except Exception as e:
+            st.error(f"Error generating roster: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
+            return None, None
+
+    def fill_missing_days(self, roster_df, available_champions):
+        """Ensure every active champion has exactly 5 working days"""
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        
+        # Get current assignments
+        current_assignments = {}
+        for _, row in roster_df.iterrows():
+            champ = row['Champion']
+            day = row['Day']
+            if champ not in current_assignments:
+                current_assignments[champ] = set()
+            current_assignments[champ].add(day)
+        
+        # Fill missing days for active champions
+        new_roster_data = []
+        active_champions = [champ for champ in available_champions if champ['status'] == 'Active']
+        
+        for champ in active_champions:
+            champ_name = champ['name']
+            assigned_days = current_assignments.get(champ_name, set())
+            
+            # If champion has less than 5 days, add missing days
+            if len(assigned_days) < 5:
+                missing_days = [day for day in days if day not in assigned_days]
+                # Use deterministic selection to choose exactly 5 days total
+                days_to_add = missing_days[:5 - len(assigned_days)]
                 
-                new_roster_data.append({
-                    'Day': day,
-                    'Champion': champ_name,
-                    'Primary Language': champ['primary_lang'].upper(),
-                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                    'Start Time': shift_pattern['display'],
-                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                    'Duration': f'{shift_pattern["hours"]} hours',
-                    'Calls/Hour Capacity': champ['calls_per_hour'],
-                    'Can Split': 'Yes' if champ['can_split'] else 'No',
-                    'Gender': champ['gender'],
-                    'Status': champ['status']
-                })
-    
-    # Add all existing assignments
-    for _, row in roster_df.iterrows():
-        new_roster_data.append(row.to_dict())
-    
-    return pd.DataFrame(new_roster_data)
+                for day in days_to_add:
+                    shift_pattern = self.get_appropriate_shift(champ)
+                    
+                    new_roster_data.append({
+                        'Day': day,
+                        'Champion': champ_name,
+                        'Primary Language': champ['primary_lang'].upper(),
+                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                        'Start Time': shift_pattern['display'],
+                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                        'Duration': f'{shift_pattern["hours"]} hours',
+                        'Calls/Hour Capacity': champ['calls_per_hour'],
+                        'Can Split': 'Yes' if champ['can_split'] else 'No',
+                        'Gender': champ['gender'],
+                        'Status': champ['status']
+                    })
+        
+        # Add all existing assignments
+        for _, row in roster_df.iterrows():
+            new_roster_data.append(row.to_dict())
+        
+        return pd.DataFrame(new_roster_data)
 
     def get_available_champions(self, leave_data, specific_date=None):
         available_champs = []
