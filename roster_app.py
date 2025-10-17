@@ -840,7 +840,7 @@ def enforce_morning_coverage(self, roster_df, min_champs=2, max_champs=3):
         
         return roster_df
 
-    def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
+def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
         """Add morning champions to a specific day"""
         # Get champions already working this day
         day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
