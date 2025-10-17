@@ -439,14 +439,18 @@ def is_agent_working_at_hour(self, row, hour):
         else:
             return "🔴 CRITICAL"
 
-    def create_template_file(self):
+def create_template_file(self):
+    """Create Excel template file for data input - FIXED VERSION"""
+    try:
         dates = [(datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(30, 0, -1)]
 
+        # Hourly Data
         hourly_data = pd.DataFrame({
             'Hour': list(range(7, 22)),
             'Calls': [0] * 15
         })
 
+        # Daily Data
         daily_data = pd.DataFrame({
             'Date': dates,
             'Total_Calls': [0] * 30,
@@ -454,7 +458,8 @@ def is_agent_working_at_hour(self, row, hour):
             'Peak_Volume': [0] * 30
         })
 
-        leave_data = pd.DataFrame({
+        # Leave Data - FIXED: Use proper leave data structure
+        leave_columns = {
             'Champion': [champ['name'] for champ in self.champions],
             'Sick_Leave': [0] * len(self.champions),
             'Casual_Leave': [0] * len(self.champions),
@@ -462,20 +467,21 @@ def is_agent_working_at_hour(self, row, hour):
             'Annual_Leave': [0] * len(self.champions),
             'Comp_Off': [0] * len(self.champions),
             'Maternity_Leave': [1 if champ['status'] == 'Maternity' else 0 for champ in self.champions]
-        })
+        }
+        leave_data = pd.DataFrame(leave_columns)
 
-        # Add champion data sheet
+        # Champion Data - FIXED: Ensure all required columns
         champion_data = pd.DataFrame({
             'Name': [champ['name'] for champ in self.champions],
             'Primary_Language': [champ['primary_lang'] for champ in self.champions],
-            'Secondary_Languages': [','.join(champ['secondary_langs']) for champ in self.champions],
+            'Secondary_Languages': [','.join(champ['secondary_langs']) if champ['secondary_langs'] else '' for champ in self.champions],
             'Calls_Per_Hour': [champ['calls_per_hour'] for champ in self.champions],
             'Can_Split': [1 if champ['can_split'] else 0 for champ in self.champions],
             'Gender': [champ['gender'] for champ in self.champions],
             'Status': [champ['status'] for champ in self.champions]
         })
 
-        # Add language-specific call data
+        # Language Data - FIXED: Ensure proper structure
         language_data = pd.DataFrame({
             'Hour': list(range(7, 22)),
             'ka': [0] * 15,  # Kannada
@@ -485,8 +491,9 @@ def is_agent_working_at_hour(self, row, hour):
             'en': [0] * 15   # English
         })
 
-        instructions = pd.DataFrame({
-            'Instruction': [
+        # Instructions - FIXED: Use proper DataFrame structure
+        instructions_data = {
+            'Instructions': [
                 'INSTRUCTIONS:',
                 '1. Fill in your call volume data in the appropriate sheets',
                 '2. For best results, use the Hourly_Data sheet with calls per hour',
@@ -533,8 +540,10 @@ def is_agent_working_at_hour(self, row, hour):
                 '- Comp_Off: 1 if on comp off, 0 otherwise',
                 '- Maternity_Leave: 1 if on maternity leave, 0 otherwise'
             ]
-        })
+        }
+        instructions = pd.DataFrame(instructions_data)
 
+        # Create Excel file - FIXED: Use BytesIO properly
         excel_buffer = BytesIO()
         with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
             instructions.to_excel(writer, sheet_name='Instructions', index=False)
@@ -544,7 +553,64 @@ def is_agent_working_at_hour(self, row, hour):
             leave_data.to_excel(writer, sheet_name='Leave_Data', index=False)
             language_data.to_excel(writer, sheet_name='Language_Data', index=False)
 
+        # Reset buffer position and return data
+        excel_buffer.seek(0)
         return excel_buffer.getvalue()
+
+    except Exception as e:
+        # Fallback: create a simple template if the detailed one fails
+        st.error(f"Error creating template: {str(e)}")
+        return self.create_simple_template()
+        
+def fix_morning_overstaffing(self, roster_df):
+    """Fix the morning overstaffing issue by ensuring exactly 3 champions at 7 AM"""
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    for day in days:
+        day_roster = roster_df[roster_df['Day'] == day]
+        
+        # Count champions starting at 7 AM
+        seven_am_champs = []
+        for idx, row in day_roster.iterrows():
+            if '07:' in str(row['Start Time']) or '7:' in str(row['Start Time']):
+                seven_am_champs.append((idx, row['Champion']))
+        
+        # If more than 3, convert excess to later shifts
+        if len(seven_am_champs) > 3:
+            excess_count = len(seven_am_champs) - 3
+            for i in range(excess_count):
+                idx, champ_name = seven_am_champs[i]
+                champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
+                if champ_data:
+                    # Assign a later shift (8 AM or 9 AM)
+                    later_shifts = [s for s in self.shift_patterns if s['times'][0] >= 8]
+                    if later_shifts:
+                        new_shift = later_shifts[hash(champ_name) % len(later_shifts)]
+                        roster_df.at[idx, 'Start Time'] = new_shift['display']
+                        roster_df.at[idx, 'End Time'] = f"{new_shift['times'][-1]:02d}:00"
+                        roster_df.at[idx, 'Duration'] = f'{new_shift["hours"]} hours'
+                        roster_df.at[idx, 'Shift Type'] = 'Split' if new_shift['type'] == 'split' else 'Straight'
+    
+    return roster_df
+def create_simple_template(self):
+    """Create a simple fallback template"""
+    try:
+        # Simple hourly data template
+        hourly_data = pd.DataFrame({
+            'Hour': list(range(7, 22)),
+            'Calls': [0] * 15
+        })
+
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            hourly_data.to_excel(writer, sheet_name='Hourly_Data', index=False)
+        
+        excel_buffer.seek(0)
+        return excel_buffer.getvalue()
+    except Exception as e:
+        st.error(f"Even simple template failed: {str(e)}")
+        # Return empty bytes as last resort
+        return b''
 
     def analyze_excel_data(self, uploaded_file):
         try:
@@ -1145,46 +1211,49 @@ def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
         else:
             return (shift['times'][0] <= hour < shift['times'][1]) or (shift['times'][2] <= hour < shift['times'][3])
 
-    def generate_roster(self, analysis_data, manual_splits=None, selected_languages=None):
-        try:
-            available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
-            
-            # Filter by selected languages if any
-            if selected_languages:
-                available_champions = [champ for champ in available_champions 
-                                     if champ['primary_lang'] in selected_languages 
-                                     or any(lang in selected_languages for lang in champ['secondary_langs'])]
-            
-            # Use language-aware optimization if language data is available
-            if 'language_volume' in analysis_data:
-                roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
-            else:
-                roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
-            
-            # Ensure no blank cells - fill missing days
-            roster_df = self.fill_missing_days(roster_df, available_champions)
-            
-            roster_df = self.apply_special_rules(roster_df)
+def generate_roster(self, analysis_data, manual_splits=None, selected_languages=None):
+    try:
+        available_champions = self.get_available_champions(analysis_data.get('leave_data', {}))
+        
+        # Filter by selected languages if any
+        if selected_languages:
+            available_champions = [champ for champ in available_champions 
+                                 if champ['primary_lang'] in selected_languages 
+                                 or any(lang in selected_languages for lang in champ['secondary_langs'])]
+        
+        # Use language-aware optimization if language data is available
+        if 'language_volume' in analysis_data:
+            roster_df = self.optimize_roster_with_languages(analysis_data, available_champions)
+        else:
+            roster_df = self.optimize_roster_for_call_flow(analysis_data, available_champions, selected_languages)
+        
+        # Fix morning overstaffing
+        roster_df = self.fix_morning_overstaffing(roster_df)
+        
+        # Ensure no blank cells - fill missing days
+        roster_df = self.fill_missing_days(roster_df, available_champions)
+        
+        roster_df = self.apply_special_rules(roster_df)
 
-            if manual_splits:
-                roster_df = self.apply_manual_splits(roster_df, manual_splits)
+        if manual_splits:
+            roster_df = self.apply_manual_splits(roster_df, manual_splits)
 
-            # Use enhanced weekly off assignment with requests
-            active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
-            roster_df, week_offs = self.assign_weekly_offs_with_requests(
-                roster_df, 
-                analysis_data.get('leave_data', {}), 
-                min_split_champs=active_split_champs
-            )  
+        # Use enhanced weekly off assignment with requests
+        active_split_champs = getattr(st.session_state, 'active_split_champs', 4)
+        roster_df, week_offs = self.assign_weekly_offs_with_requests(
+            roster_df, 
+            analysis_data.get('leave_data', {}), 
+            min_split_champs=active_split_champs
+        )  
 
-            return roster_df, week_offs
+        return roster_df, week_offs
 
-        except Exception as e:
-            st.error(f"Error generating roster: {str(e)}")
-            import traceback
-            st.error(traceback.format_exc())
-            return None, None
-
+    except Exception as e:
+        st.error(f"Error generating roster: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return None, None
+        
 def fill_missing_days(self, roster_df, available_champions):
     """Ensure every active champion has exactly 5 working days"""
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
