@@ -394,37 +394,40 @@ class CallCenterRosterOptimizer:
 
         return hourly_al_results
 
-    def is_agent_working_at_hour(self, row, hour):
-        """Check if an agent is working at a specific hour - IMPROVED VERSION"""
-        try:
-            if pd.isna(row['Start Time']):
-                return False
-                
-            shift_time = row['Start Time']
+def is_agent_working_at_hour(self, row, hour):
+    """Check if an agent is working at a specific hour - FIXED for 7 AM counting"""
+    try:
+        if pd.isna(row['Start Time']):
+            return False
             
-            # Handle straight shifts
-            if '&' not in shift_time:
-                times = shift_time.split(' to ')
+        shift_time = row['Start Time']
+        
+        # For 7 AM specifically, only count if shift starts at 7 AM
+        if hour == 7:
+            return '07:' in shift_time or '7:' in shift_time
+        
+        # Handle straight shifts for other hours
+        if '&' not in shift_time:
+            times = shift_time.split(' to ')
+            if len(times) >= 2:
+                start_hour = int(times[0].split(':')[0])
+                end_hour = int(times[1].split(':')[0])
+                return start_hour <= hour < end_hour
+        
+        # Handle split shifts for other hours
+        else:
+            shifts = shift_time.split(' & ')
+            for shift in shifts:
+                times = shift.split(' to ')
                 if len(times) >= 2:
                     start_hour = int(times[0].split(':')[0])
                     end_hour = int(times[1].split(':')[0])
-                    # Check if hour is within shift (inclusive start, exclusive end)
-                    return start_hour <= hour < end_hour
-            
-            # Handle split shifts
-            else:
-                shifts = shift_time.split(' & ')
-                for shift in shifts:
-                    times = shift.split(' to ')
-                    if len(times) >= 2:
-                        start_hour = int(times[0].split(':')[0])
-                        end_hour = int(times[1].split(':')[0])
-                        if start_hour <= hour < end_hour:
-                            return True
-            return False
-            
-        except Exception as e:
-            return False
+                    if start_hour <= hour < end_hour:
+                        return True
+        return False
+        
+    except Exception as e:
+        return False
 
     def get_al_status(self, al_value):
         if al_value >= self.TARGET_AL:
@@ -842,30 +845,29 @@ class CallCenterRosterOptimizer:
             st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
 
-    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
-        """Ensure each day has exactly 3 champions working at 7 AM"""
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
+    """Ensure each day has exactly 3 champions starting at 7 AM"""
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    for day in days:
+        day_roster = roster_df[roster_df['Day'] == day]
+        morning_champs = 0
         
-        for day in days:
-            day_roster = roster_df[roster_df['Day'] == day]
-            morning_champs = 0
-            
-            # Count current morning champions
-            for _, row in day_roster.iterrows():
-                if self.is_agent_working_at_hour(row, 7):  # 7 AM
-                    morning_champs += 1
-            
-            # Adjust if needed
-            if morning_champs < min_champs:
-                # Need to add more morning champions
-                needed = min_champs - morning_champs
-                roster_df = self.add_morning_champions(roster_df, day, needed)
-            elif morning_champs > max_champs:
-                # Need to reduce morning champions
-                excess = morning_champs - max_champs
-                roster_df = self.reduce_morning_champions(roster_df, day, excess)
+        # Count ONLY champions starting exactly at 7 AM
+        for _, row in day_roster.iterrows():
+            start_time = row['Start Time']
+            if start_time and '07:' in start_time:  # Only count those starting at 7 AM
+                morning_champs += 1
         
-        return roster_df
+        # Adjust if needed - FIXED LOGIC
+        if morning_champs < min_champs:
+            needed = min_champs - morning_champs
+            roster_df = self.add_morning_champions(roster_df, day, needed)
+        elif morning_champs > max_champs:
+            excess = morning_champs - max_champs
+            roster_df = self.reduce_morning_champions(roster_df, day, excess)
+    
+    return roster_df
 
     def enforce_split_shift_coverage(self, roster_df, min_split_champs=2):
         """Ensure each day has at least minimum split shift champions"""
@@ -1183,57 +1185,56 @@ class CallCenterRosterOptimizer:
             st.error(traceback.format_exc())
             return None, None
 
-    def fill_missing_days(self, roster_df, available_champions):
-        """Ensure every champion has shifts for all working days and handle blank cells"""
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+def fill_missing_days(self, roster_df, available_champions):
+    """Ensure every active champion has exactly 5 working days"""
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # Get current assignments
+    current_assignments = {}
+    for _, row in roster_df.iterrows():
+        champ = row['Champion']
+        day = row['Day']
+        if champ not in current_assignments:
+            current_assignments[champ] = set()
+        current_assignments[champ].add(day)
+    
+    # Fill missing days for active champions
+    new_roster_data = []
+    active_champions = [champ for champ in available_champions if champ['status'] == 'Active']
+    
+    for champ in active_champions:
+        champ_name = champ['name']
+        assigned_days = current_assignments.get(champ_name, set())
         
-        # Get current assignments
-        current_assignments = {}
-        for _, row in roster_df.iterrows():
-            champ = row['Champion']
-            day = row['Day']
-            if champ not in current_assignments:
-                current_assignments[champ] = {}
-            current_assignments[champ][day] = row.to_dict()
-        
-        # Fill missing days
-        new_roster_data = []
-        for champ in available_champions:
-            champ_name = champ['name']
-            champ_days = current_assignments.get(champ_name, {})
-            work_days = list(champ_days.keys())
+        # If champion has less than 5 days, add missing days
+        if len(assigned_days) < 5:
+            missing_days = [day for day in days if day not in assigned_days]
+            # Use deterministic selection to choose exactly 5 days total
+            days_to_add = missing_days[:5 - len(assigned_days)]
             
-            # If champion has less than 5 days, add missing days
-            if len(work_days) < 5:
-                missing_days = [day for day in days if day not in work_days]
-                # Use deterministic selection of days to add
-                champ_hash = hash(champ_name)
-                random.seed(champ_hash)
-                days_to_add = random.sample(missing_days, min(5 - len(work_days), len(missing_days)))
+            for day in days_to_add:
+                shift_pattern = self.get_appropriate_shift(champ)
                 
-                for day in days_to_add:
-                    shift_pattern = self.get_appropriate_shift(champ)
-                    
-                    new_roster_data.append({
-                        'Day': day,
-                        'Champion': champ_name,
-                        'Primary Language': champ['primary_lang'].upper(),
-                        'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
-                        'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
-                        'Start Time': shift_pattern['display'],
-                        'End Time': f"{shift_pattern['times'][-1]:02d}:00",
-                        'Duration': f'{shift_pattern["hours"]} hours',
-                        'Calls/Hour Capacity': champ['calls_per_hour'],
-                        'Can Split': 'Yes' if champ['can_split'] else 'No',
-                        'Gender': champ['gender'],
-                        'Status': champ['status']
-                    })
-            
-            # Add existing assignments
-            for day, assignment in champ_days.items():
-                new_roster_data.append(assignment)
-        
-        return pd.DataFrame(new_roster_data)
+                new_roster_data.append({
+                    'Day': day,
+                    'Champion': champ_name,
+                    'Primary Language': champ['primary_lang'].upper(),
+                    'Secondary Languages': ', '.join([lang.upper() for lang in champ['secondary_langs']]),
+                    'Shift Type': 'Split' if shift_pattern['type'] == 'split' else 'Straight',
+                    'Start Time': shift_pattern['display'],
+                    'End Time': f"{shift_pattern['times'][-1]:02d}:00",
+                    'Duration': f'{shift_pattern["hours"]} hours',
+                    'Calls/Hour Capacity': champ['calls_per_hour'],
+                    'Can Split': 'Yes' if champ['can_split'] else 'No',
+                    'Gender': champ['gender'],
+                    'Status': champ['status']
+                })
+    
+    # Add all existing assignments
+    for _, row in roster_df.iterrows():
+        new_roster_data.append(row.to_dict())
+    
+    return pd.DataFrame(new_roster_data)
 
     def get_available_champions(self, leave_data, specific_date=None):
         available_champs = []
