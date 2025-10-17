@@ -679,7 +679,7 @@ class CallCenterRosterOptimizer:
             
             # Track morning shifts to prevent overstaffing
             morning_shifts_per_day = {day: 0 for day in days}
-            max_morning_shifts = 4  # Maximum 4 champions at 7 AM
+            max_morning_shifts = 3  # Maximum 3 champions at 7 AM
             
             # Separate champions by gender and split capability
             female_non_split = [champ for champ in available_champions 
@@ -802,7 +802,12 @@ class CallCenterRosterOptimizer:
                         'Status': champ['status']
                     })
             
-            return pd.DataFrame(roster_data)
+            roster_df = pd.DataFrame(roster_data)
+            
+            # ENSURE EXACTLY 3 CHAMPIONS AT 7 AM
+            roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=3)
+            
+            return roster_df
             
         except Exception as e:
             st.error(f"Optimization error: {str(e)}")
@@ -810,52 +815,43 @@ class CallCenterRosterOptimizer:
             st.error(traceback.format_exc())
             return self.generate_fallback_roster(available_champions, days)
 
-def enforce_morning_coverage(self, roster_df, min_champs=2, max_champs=3):
-        """Ensure each day has between min_champs and max_champs working at 7 AM"""
+    def enforce_morning_coverage(self, roster_df, min_champs=3, max_champs=3):
+        """Ensure each day has exactly 3 champions working at 7 AM"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         
-        # First validate current coverage
-        coverage = self.validate_morning_coverage(roster_df)
-        
         for day in days:
-            day_result = coverage[day]
-            morning_champs = day_result['morning_champs']
-            
-            # Get list of morning workers for this day
             day_roster = roster_df[roster_df['Day'] == day]
-            morning_workers = []
-            for idx, row in day_roster.iterrows():
+            morning_champs = 0
+            
+            # Count current morning champions
+            for _, row in day_roster.iterrows():
                 if self.is_agent_working_at_hour(row, 7):  # 7 AM
-                    morning_workers.append((idx, row['Champion']))
+                    morning_champs += 1
             
             # Adjust if needed
             if morning_champs < min_champs:
                 # Need to add more morning champions
                 needed = min_champs - morning_champs
-                roster_df = self.add_morning_champions(roster_df, day, needed, morning_workers)
+                roster_df = self.add_morning_champions(roster_df, day, needed)
             elif morning_champs > max_champs:
                 # Need to reduce morning champions
                 excess = morning_champs - max_champs
-                roster_df = self.reduce_morning_champions(roster_df, day, excess, morning_workers)
+                roster_df = self.reduce_morning_champions(roster_df, day, excess)
         
         return roster_df
 
-def add_morning_champions(self, roster_df, day, count_needed, existing_morning_workers):
+    def add_morning_champions(self, roster_df, day, count_needed):
         """Add morning champions to a specific day"""
         # Get champions already working this day
         day_workers = roster_df[roster_df['Day'] == day]['Champion'].tolist()
-        existing_morning_names = [name for _, name in existing_morning_workers]
         
-        # Find available champions who can work mornings
+        # Find available champions who can work mornings and are not already working this day
         available_champs = []
         for champ in self.champions:
             if (champ['name'] not in day_workers and  # Not already working this day
                 champ['status'] == 'Active' and  # Only active champions
-                champ['name'] not in existing_morning_names):  # Not already a morning worker
-                
-                # Check if champion can work morning shifts based on gender constraints
-                if self.can_work_morning_shift(champ):
-                    available_champs.append(champ)
+                self.can_work_morning_shift(champ)):  # Can work morning shifts
+                available_champs.append(champ)
         
         # Add morning workers
         for i in range(min(count_needed, len(available_champs))):
@@ -883,28 +879,19 @@ def add_morning_champions(self, roster_df, day, count_needed, existing_morning_w
         
         return roster_df
 
-    def reduce_morning_champions(self, roster_df, day, count_to_reduce, morning_workers):
+    def reduce_morning_champions(self, roster_df, day, count_to_reduce):
         """Reduce morning champions on a specific day"""
-        # Sort by shift type: split shift workers first (keep them), straight shifts second
-        split_workers = []
-        straight_workers = []
+        day_roster = roster_df[roster_df['Day'] == day]
+        morning_workers = []
         
-        for idx, champ_name in morning_workers:
-            row = roster_df.loc[idx]
-            if row['Shift Type'] == 'Split':
-                split_workers.append((idx, champ_name))
-            else:
-                straight_workers.append((idx, champ_name))
+        # Find all morning workers for this day
+        for idx, row in day_roster.iterrows():
+            if self.is_agent_working_at_hour(row, 7):  # 7 AM
+                morning_workers.append((idx, row['Champion']))
         
-        # First remove straight shift workers, then split if needed
-        workers_to_adjust = straight_workers[:count_to_reduce]
-        remaining = count_to_reduce - len(workers_to_adjust)
-        
-        if remaining > 0:
-            workers_to_adjust.extend(split_workers[:remaining])
-        
-        # Change these workers to non-morning shifts
-        for idx, champ_name in workers_to_adjust:
+        # Remove excess morning workers
+        for i in range(min(count_to_reduce, len(morning_workers))):
+            idx, champ_name = morning_workers[i]
             champ_data = next((c for c in self.champions if c['name'] == champ_name), None)
             if champ_data:
                 non_morning_shift = self.get_non_morning_shift_for_champ(champ_data)
@@ -1048,8 +1035,8 @@ def add_morning_champions(self, roster_df, day, count_needed, existing_morning_w
         
         roster_df = pd.DataFrame(roster_data)
         
-        # Ensure 3-4 champions at 7 AM
-        roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=4)
+        # Ensure exactly 3 champions at 7 AM
+        roster_df = self.enforce_morning_coverage(roster_df, min_champs=3, max_champs=3)
         
         return roster_df
 
@@ -1696,7 +1683,7 @@ def add_morning_champions(self, roster_df, day, count_needed, existing_morning_w
         return validation_results
 
     def validate_morning_coverage(self, roster_df):
-        """Validate that 2-3 champions are available at 7 AM each day"""
+        """Validate that exactly 3 champions are available at 7 AM each day"""
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         validation_results = {}
     
@@ -1708,9 +1695,9 @@ def add_morning_champions(self, roster_df, day, count_needed, existing_morning_w
                 if self.is_agent_working_at_hour(row, 7):  # 7 AM
                     morning_champs += 1
         
-            if 2 <= morning_champs <= 3:  # UPDATED RANGE
+            if morning_champs == 3:  # EXACTLY 3 champions
                 status = '✅ Perfect'
-            elif morning_champs > 3:  # UPDATED RANGE
+            elif morning_champs > 3:
                 status = '🟡 Overstaffed'
             else:
                 status = '🔴 Insufficient'
@@ -1718,7 +1705,7 @@ def add_morning_champions(self, roster_df, day, count_needed, existing_morning_w
             validation_results[day] = {
                 'morning_champs': morning_champs,
                 'status': status,
-                'within_range': 2 <= morning_champs <= 3  # UPDATED RANGE
+                'within_range': morning_champs == 3  # EXACTLY 3
             }
     
         return validation_results
@@ -2518,7 +2505,7 @@ def main():
                       help="Percentage of hours achieving target AL of 95%")
         with col2:
             st.metric("Morning Coverage Compliance", f"{morning_compliant_days}/7 days", 
-                      help="Days with 3-4 champions at 7 AM")
+                      help="Days with exactly 3 champions at 7 AM")
         with col3:
             avg_morning_champs = sum(result['morning_champs'] for result in morning_validation.values()) / 7
             st.metric("Avg Morning Champions", f"{avg_morning_champs:.1f}", 
