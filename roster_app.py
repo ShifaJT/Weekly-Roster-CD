@@ -13,7 +13,7 @@ from openpyxl.utils import get_column_letter
 
 # Page configuration
 st.set_page_config(
-    page_title="Call Center Roster Optimizer",
+    page_title="Customer Delight Roster Optimizer",
     page_icon="📞",
     layout="wide",
     initial_sidebar_state="expanded"
